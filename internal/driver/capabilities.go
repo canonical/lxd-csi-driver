@@ -1,6 +1,9 @@
 package driver
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
@@ -24,4 +27,34 @@ func NewNodeServiceCapability(cap csi.NodeServiceCapability_RPC_Type) *csi.NodeS
 			},
 		},
 	}
+}
+
+// ValidateVolumeCapabilities validates the provided volume capabilities.
+func ValidateVolumeCapabilities(volCaps ...*csi.VolumeCapability) error {
+	if len(volCaps) == 0 {
+		return fmt.Errorf("Request has no volume capabilities")
+	}
+
+	accessTypeBlock := false
+	accessTypeMount := false
+
+	for _, c := range volCaps {
+		if c.GetBlock() != nil {
+			accessTypeBlock = true
+		}
+
+		if c.GetMount() != nil {
+			accessTypeMount = true
+		}
+	}
+
+	if !accessTypeBlock && !accessTypeMount {
+		return errors.New("VolumeCapability cannot have both the mount and the block access types undefined")
+	}
+
+	if accessTypeBlock && accessTypeMount {
+		return errors.New("VolumeCapability cannot have both the mount and the block access types defined")
+	}
+
+	return nil
 }
