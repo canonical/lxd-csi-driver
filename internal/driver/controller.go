@@ -206,3 +206,34 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		},
 	}, nil
 }
+
+// DeleteVolume deletes a volume from the LXD storage pool.
+func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
+	client := c.driver.devLXD
+
+	target, poolName, volName, err := splitVolumeID(req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "DeleteVolume: %v", err)
+	}
+
+	// Set target if provided and LXD is clustered.
+	if target != "" && c.driver.isClustered {
+		client = client.UseTarget(target)
+	}
+
+	unlock, err := locking.Lock(ctx, req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: Failed to obtain lock %q: %v", req.VolumeId, err)
+	}
+
+	defer unlock()
+
+	// Delete storage volume. If volume does not exist, we consider
+	// the operation successful.
+	err = client.DeleteStoragePoolVolume(poolName, "custom", volName)
+	if err != nil && !api.StatusErrorCheck(err, http.StatusNotFound) {
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: Failed to delete volume %q from storage pool %q: %v", volName, poolName, err)
+	}
+
+	return &csi.DeleteVolumeResponse{}, nil
+}
