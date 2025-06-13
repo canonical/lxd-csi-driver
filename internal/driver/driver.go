@@ -27,6 +27,12 @@ const (
 	DefaultDevLXDEndpoint = "unix:///dev/lxd/sock"
 )
 
+const (
+	// AnnotationLXDClusterMember is the name of the annotation that
+	// specifies the location for the CSINode and volume.
+	AnnotationLXDClusterMember = "lxd.csi.canonical.com/cluster-member"
+)
+
 // DriverOptions contains the configurable options for the driver.
 type DriverOptions struct {
 	// Name of the driver.
