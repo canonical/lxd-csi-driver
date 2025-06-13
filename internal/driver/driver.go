@@ -1,5 +1,10 @@
 package driver
 
+import (
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"k8s.io/klog/v2"
+)
+
 // driverVersion is the version of the CSI driver.
 // It is set during the build.
 const driverVersion = "dev"
@@ -33,6 +38,11 @@ type Driver struct {
 	endpoint string
 	nodeID   string
 
+	// Capabilities.
+	controllerCapabilities []*csi.ControllerServiceCapability
+	nodeCapabilities       []*csi.NodeServiceCapability
+	pluginCapabilities     []*csi.PluginCapability
+
 	// DevLXD.
 	devLXDEndpoint string
 }
@@ -52,4 +62,26 @@ func NewDriver(opts DriverOptions) *Driver {
 
 func (d *Driver) Run() error {
 	return nil
+}
+
+// SetControllerServiceCapabilities sets the controller service capabilities.
+func (d *Driver) SetControllerServiceCapabilities(caps ...csi.ControllerServiceCapability_RPC_Type) {
+	capabilities := make([]*csi.ControllerServiceCapability, len(caps))
+	for _, cap := range caps {
+		klog.InfoS("Enabling controller service capability", "capability", cap.String())
+		capabilities = append(capabilities, NewControllerServiceCapability(cap))
+	}
+
+	d.controllerCapabilities = capabilities
+}
+
+// SetNodeServiceCapabilities sets the node service capabilities.
+func (d *Driver) SetNodeServiceCapabilities(caps ...csi.NodeServiceCapability_RPC_Type) {
+	capabilities := make([]*csi.NodeServiceCapability, len(caps))
+	for _, cap := range caps {
+		klog.InfoS("Enabling node service capability", "capability", cap.String())
+		capabilities = append(capabilities, NewNodeServiceCapability(cap))
+	}
+
+	d.nodeCapabilities = capabilities
 }
