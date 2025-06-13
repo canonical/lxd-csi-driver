@@ -152,3 +152,9 @@ func (d *Driver) SetNodeServiceCapabilities(caps ...csi.NodeServiceCapability_RP
 
 	d.nodeCapabilities = capabilities
 }
+
+// VolumeDescription returns the generic description for the volume
+// that is managed by the CSI driver.
+func (d *Driver) VolumeDescription() string {
+	return "Managed by " + d.name
+}
