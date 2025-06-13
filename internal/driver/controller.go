@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"path/filepath"
 
 	"github.com/canonical/lxd/lxd/locking"
 	"github.com/canonical/lxd/shared/api"
@@ -222,4 +223,66 @@ func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
+}
+
+func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
+	client := c.driver.devLXD
+
+	poolName, volName, err := splitVolumeID(req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ControllerPublishVolume: %v", err)
+	}
+
+	contentType := ParseContentType(req.VolumeCapability)
+	if contentType == "" {
+		return nil, status.Error(codes.InvalidArgument, "ControllerPublishVolume: Volume capability must specify either block or filesystem access type")
+	}
+
+	unlock, err := locking.Lock(ctx, req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: Failed to obtain lock %q: %v", req.VolumeId, err)
+	}
+
+	defer unlock()
+
+	// Get existing storage pool volume.
+	_, _, err = client.GetStoragePoolVolume(poolName, "custom", volName)
+	if err != nil {
+		if api.StatusErrorCheck(err, http.StatusNotFound) {
+			return nil, status.Errorf(codes.NotFound, "ControllerPublishVolume: Volume %q not found in storage pool %q", volName, poolName)
+		}
+
+		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: Failed to retrieve volume %q from storage pool %q: %v", volName, poolName, err)
+	}
+
+	// Attach volume to the instance.
+	volDevice := map[string]string{
+		"source": volName,
+		"pool":   poolName,
+		"type":   "disk",
+	}
+
+	if contentType == "filesystem" {
+		// For filesystem volumes, provide the path where the volume is mounted.
+		volDevice["path"] = filepath.Join(driverFileSystemMountPath, volName)
+	}
+
+	err = client.CreateInstanceDevice(req.NodeId, volDevice)
+	if err != nil {
+		if api.StatusErrorCheck(err, http.StatusConflict) {
+			// If device already exists, ensure it is the expected device.
+			dev, _, err := client.GetInstanceDevice(req.NodeId, volName)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: %v", err)
+			}
+
+			if dev["source"] != volName || dev["pool"] != poolName || dev["type"] != "disk" || (contentType == "filesystem" && dev["path"] != filepath.Join(driverFileSystemMountPath, volName)) {
+				return nil, status.Errorf(codes.AlreadyExists, "ControllerPublishVolume: Device %q already exists on node %q but does not match expected parameters", volName, req.NodeId)
+			}
+		} else {
+			return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: Failed to attach volume %q: %v", volName, err)
+		}
+	}
+
+	return &csi.ControllerPublishVolumeResponse{}, nil
 }
