@@ -31,6 +31,20 @@ const (
 	AnnotationLXDClusterMember = "lxd.csi.canonical.com/cluster-member"
 )
 
+const (
+	// ParameterStoragePool is the name of the storage class parameter
+	// that specifies the LXD storage pool to use.
+	//
+	// This is required parameter and must be set by the user.
+	ParameterStoragePool = "storagePool"
+
+	// ParameterStorageDriver is the name of the underlying storage pool
+	// driver.
+	//
+	// This is internal parameter used only by the CSI driver.
+	ParameterStorageDriver = "internal.storageDriver"
+)
+
 // DriverOptions contains the configurable options for the driver.
 type DriverOptions struct {
 	// Name of the driver.
