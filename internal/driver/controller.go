@@ -313,3 +313,36 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 
 	return &csi.ControllerPublishVolumeResponse{}, nil
 }
+
+// ControllerUnpublishVolume detaches LXD custom volume from a node.
+// If the volume is not attached, the operation is considered successful.
+func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
+	client := c.driver.devLXD
+
+	_, _, volName, err := splitVolumeID(req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ControllerUnpublishVolume: %v", err)
+	}
+
+	unlock, err := locking.Lock(ctx, req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerUnpublishVolume: Failed to obtain lock %q: %v", req.VolumeId, err)
+	}
+
+	defer unlock()
+
+	reqInst := api.DevLXDInstancePut{
+		Devices: map[string]map[string]string{
+			volName: nil,
+		},
+	}
+
+	// Detach volume.
+	// If volume attachment does not exist, consider the operation successful.
+	err = client.UpdateInstance(req.NodeId, reqInst, "")
+	if err != nil && !api.StatusErrorCheck(err, http.StatusNotFound) {
+		return nil, status.Errorf(codes.Internal, "ControllerUnpublishVolume: Failed to detach volume %q: %v", volName, err)
+	}
+
+	return &csi.ControllerUnpublishVolumeResponse{}, nil
+}
