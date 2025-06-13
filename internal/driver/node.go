@@ -26,3 +26,15 @@ func (n *nodeServer) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabi
 		Capabilities: n.driver.nodeCapabilities,
 	}, nil
 }
+
+// NodeGetInfo returns the information about the node on which the plugin is running.
+func (n *nodeServer) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+	return &csi.NodeGetInfoResponse{
+		NodeId: n.driver.nodeID,
+		AccessibleTopology: &csi.Topology{
+			Segments: map[string]string{
+				AnnotationLXDClusterMember: n.driver.location,
+			},
+		},
+	}, nil
+}
