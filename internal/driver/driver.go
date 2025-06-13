@@ -1,8 +1,17 @@
 package driver
 
 import (
+	"fmt"
+	"net"
+	"os"
+
+	lxdClient "github.com/canonical/lxd/client"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc"
 	"k8s.io/klog/v2"
+
+	"github.com/canonical/lxd-csi-driver/internal/devlxd"
+	"github.com/canonical/lxd-csi-driver/internal/utils"
 )
 
 // driverVersion is the version of the CSI driver.
@@ -44,7 +53,14 @@ type Driver struct {
 	pluginCapabilities     []*csi.PluginCapability
 
 	// DevLXD.
+	devLXD         lxdClient.DevLXDServer
 	devLXDEndpoint string
+
+	// LXD cluster member where instance is running on.
+	location string
+
+	// gRPC server.
+	server *grpc.Server
 }
 
 // NewDriver initializes a new CSI driver.
@@ -60,7 +76,58 @@ func NewDriver(opts DriverOptions) *Driver {
 	return d
 }
 
+// Run starts CSI driver gRPC server.
 func (d *Driver) Run() error {
+	klog.InfoS("Starting LXD CSI driver",
+		"name", d.name,
+		"node", d.nodeID,
+		"version", d.version,
+	)
+
+	// Connect to devLXD.
+	devLXDClient, err := devlxd.Connect(d.devLXDEndpoint)
+	if err != nil {
+		return fmt.Errorf("Failed to connect to devLXD: %v", err)
+	}
+
+	info, err := d.devLXD.GetState()
+	if err != nil {
+		return fmt.Errorf("Failed to get LXD server info: %v", err)
+	}
+
+	d.devLXD = devLXDClient
+	d.location = info.Location
+
+	// Construct gRPC unix address.
+	url, socket, err := utils.ParseUnixSocketURL(d.endpoint)
+	if err != nil {
+		return err
+	}
+
+	// Delete old CSI unix socket if it exists.
+	_ = os.Remove(socket)
+
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		return fmt.Errorf("Failed to listen on %q: %v", url.String(), err)
+	}
+
+	defer listener.Close()
+
+	d.server = grpc.NewServer()
+
+	// Register CSI services.
+	csi.RegisterIdentityServer(d.server, NewIdentityServer(d))
+	csi.RegisterControllerServer(d.server, NewControllerServer(d))
+	csi.RegisterNodeServer(d.server, NewNodeServer(d))
+
+	// Start gRPC server.
+	klog.Infof("Listening for connections on address %q", url.String())
+	err = d.server.Serve(listener)
+	if err != nil {
+		return fmt.Errorf("Failed to serve gRPC server: %v", err)
+	}
+
 	return nil
 }
 
