@@ -21,6 +21,10 @@ import (
 // It is set during the build.
 const driverVersion = "dev"
 
+// driverFileSystemMountPath is the path where the CSI driver mounts
+// the filesystem volumes.
+const driverFileSystemMountPath = "/mnt/lxd-csi"
+
 // Default CSI driver configuration values.
 const (
 	DefaultDriverName     = "lxd.csi.canonical.com"
