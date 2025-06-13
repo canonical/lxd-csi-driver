@@ -1,6 +1,8 @@
 package driver
 
 import (
+	"context"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
@@ -16,4 +18,11 @@ func NewNodeServer(driver *Driver) *nodeServer {
 	return &nodeServer{
 		driver: driver,
 	}
+}
+
+// NodeGetCapabilities returns the capabilities of the node server.
+func (n *nodeServer) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
+	return &csi.NodeGetCapabilitiesResponse{
+		Capabilities: n.driver.nodeCapabilities,
+	}, nil
 }
