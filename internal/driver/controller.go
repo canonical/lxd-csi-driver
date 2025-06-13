@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"strconv"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -236,4 +237,79 @@ func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
+}
+
+// ControllerPublishVolume attaches an existing LXD custom volume to a node.
+// If the volume is already attached, the operation is considered successful.
+func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
+	client := c.driver.devLXD
+
+	target, poolName, volName, err := splitVolumeID(req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ControllerPublishVolume: %v", err)
+	}
+
+	// Set target if provided and LXD is clustered.
+	if target != "" && c.driver.isClustered {
+		client = client.UseTarget(target)
+	}
+
+	contentType := ParseContentType(req.VolumeCapability)
+	if contentType == "" {
+		return nil, status.Error(codes.InvalidArgument, "ControllerPublishVolume: Volume capability must specify either block or filesystem access type")
+	}
+
+	unlock, err := locking.Lock(ctx, req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: Failed to obtain lock %q: %v", req.VolumeId, err)
+	}
+
+	defer unlock()
+
+	// Get existing storage pool volume.
+	_, _, err = client.GetStoragePoolVolume(poolName, "custom", volName)
+	if err != nil {
+		if api.StatusErrorCheck(err, http.StatusNotFound) {
+			return nil, status.Errorf(codes.NotFound, "ControllerPublishVolume: Volume %q not found in storage pool %q", volName, poolName)
+		}
+
+		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: Failed to retrieve volume %q from storage pool %q: %v", volName, poolName, err)
+	}
+
+	inst, etag, err := client.GetInstance(req.NodeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: %v", err)
+	}
+
+	dev, ok := inst.Devices[volName]
+	if ok {
+		// If the device already exists, ensure it matches the expected parameters.
+		if dev["type"] != "disk" || dev["source"] != volName || dev["pool"] != poolName {
+			return nil, status.Errorf(codes.AlreadyExists, "ControllerPublishVolume: Device %q already exists on node %q but does not match expected parameters", volName, req.NodeId)
+		}
+
+		return &csi.ControllerPublishVolumeResponse{}, nil
+	}
+
+	reqInst := api.DevLXDInstancePut{
+		Devices: map[string]map[string]string{
+			volName: {
+				"source": volName,
+				"pool":   poolName,
+				"type":   "disk",
+			},
+		},
+	}
+
+	if contentType == "filesystem" {
+		// For filesystem volumes, provide the path where the volume is mounted.
+		reqInst.Devices[volName]["path"] = filepath.Join(driverFileSystemMountPath, volName)
+	}
+
+	err = client.UpdateInstance(req.NodeId, reqInst, etag)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: Failed to attach volume %q: %v", volName, err)
+	}
+
+	return &csi.ControllerPublishVolumeResponse{}, nil
 }
