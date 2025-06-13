@@ -132,7 +132,7 @@ func (d *Driver) Run() error {
 	// In addition, this ensures we retrieve actual information whether LXD is clustered or not.
 	// If we are not authenticated, the Environment.ServerClustered field is always false.
 	if info.Auth != api.AuthTrusted {
-		return errors.New("Failed to authenticate with DevLXD server: Client is not tursted")
+		return errors.New("Failed to authenticate with DevLXD server: Client is not trusted")
 	}
 
 	d.devLXD = devLXDClient
