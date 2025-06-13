@@ -4,6 +4,7 @@ go 1.24.2
 
 require (
 	github.com/canonical/lxd v0.0.0-20250613090011-27a413b0e9c6
+	github.com/container-storage-interface/spec v1.11.0
 	k8s.io/klog/v2 v2.130.1
 )
 
@@ -33,4 +34,7 @@ require (
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250519155744-55703ea1f237 // indirect
+	google.golang.org/grpc v1.72.1 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 )
