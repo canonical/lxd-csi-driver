@@ -97,6 +97,10 @@ func NewDriver(opts DriverOptions) *Driver {
 		nodeID:         opts.NodeID,
 	}
 
+	d.SetControllerServiceCapabilities(
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+	)
+
 	return d
 }
 
