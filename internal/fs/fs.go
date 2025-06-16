@@ -13,6 +13,16 @@ import (
 	kexec "k8s.io/utils/exec"
 )
 
+// PathExists checks if the given path exists in the filesystem.
+func PathExists(name string) bool {
+	_, err := os.Lstat(name)
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}
+
 func IsMounted(target string) (bool, error) {
 	if target == "" {
 		return false, errors.New("target is not specified for checking the mount")
