@@ -121,6 +121,22 @@ func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
+// NodeUnpublishVolume unmounts a filesystem volume or unmaps a block volume from the
+// pod’s target path on this node.
+func (n *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+	targetPath := req.TargetPath
+	if targetPath == "" {
+		return nil, status.Error(codes.InvalidArgument, "NodeUnpublishVolume: Target path not provided")
+	}
+
+	err := fs.Unmount(targetPath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodeUnpublishVolume: %v", err)
+	}
+
+	return &csi.NodeUnpublishVolumeResponse{}, nil
+}
+
 // getDiskDevicePath returns the disk device path for a given volume name.
 func getDiskDevicePath(volName string) (string, error) {
 	// LXD uses a prefix of a device name and "-" is replaced with "--".
