@@ -8,6 +8,10 @@ import (
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/canonical/lxd-csi-driver/internal/fs"
 )
 
 type nodeServer struct {
@@ -41,6 +45,80 @@ func (n *nodeServer) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (
 			},
 		},
 	}, nil
+}
+
+// NodePublishVolume mounts a filesystem volume or maps a block volume into the pod’s
+// target path on this node.
+func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	err := ValidateVolumeCapabilities(req.VolumeCapability)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "NodePublishVolume: %v", err)
+	}
+
+	_, _, volName, err := splitVolumeID(req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "NodePublishVolume: %v", err)
+	}
+
+	targetPath := req.TargetPath
+	if targetPath == "" {
+		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume: Target path not provided")
+	}
+
+	contentType := ParseContentType(req.VolumeCapability)
+	if contentType == "" {
+		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume: Volume capability must specify either block or filesystem access type")
+	}
+
+	// Mount options for the bind mount.
+	// If the volume is read-only, add "ro" option as well.
+	mountOptions := []string{"bind"}
+	if req.Readonly {
+		mountOptions = append(mountOptions, "ro")
+	}
+
+	mounted, err := fs.IsMounted(targetPath)
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("NodePublishVolume: %v", err))
+	}
+
+	if mounted {
+		// Already mounted, nothing to do.
+		return &csi.NodePublishVolumeResponse{}, nil
+	}
+
+	var sourcePath string
+
+	switch req.VolumeCapability.AccessType.(type) {
+	case *csi.VolumeCapability_Block:
+		// Get the disk device path for the block volume.
+		sourcePath, err = getDiskDevicePath(volName)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "NodePublishVolume: Source device for volume %q not found: %v", volName, err)
+		}
+	case *csi.VolumeCapability_Mount:
+		// Construct the source path for the filesystem volume.
+		sourcePath = filepath.Join(driverFileSystemMountPath, volName)
+
+		// Read mount flags from the request.
+		mnt := req.VolumeCapability.GetMount()
+		mountOptions = append(mountOptions, mnt.MountFlags...)
+
+		// Ensure source path is available.
+		if !fs.PathExists(sourcePath) {
+			return nil, status.Errorf(codes.NotFound, "NodePublishVolume: Source path %q not found", sourcePath)
+		}
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "NodePublishVolume: Unsupported access type %q", req.VolumeCapability.AccessType)
+	}
+
+	// Bind mount the volume to the target path (application container).
+	err = fs.Mount(sourcePath, targetPath, contentType, mountOptions)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodePublishVolume: %v", err)
+	}
+
+	return &csi.NodePublishVolumeResponse{}, nil
 }
 
 // getDiskDevicePath returns the disk device path for a given volume name.
