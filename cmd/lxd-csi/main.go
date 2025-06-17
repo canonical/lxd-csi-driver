@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 
 	"k8s.io/klog/v2"
 
@@ -13,11 +14,17 @@ var (
 	endpoint       = flag.String("endpoint", driver.DefaultDriverEndpoint, "CSI endpoint (unix socket path)")
 	devLXDEndpoint = flag.String("devlxd-endpoint", driver.DefaultDevLXDEndpoint, "Devlxd endpoint (devlxd unix socket path)")
 	nodeID         = flag.String("node-id", "", "Kubernetes node ID")
+	showVersion    = flag.Bool("version", false, "Show version and exit")
 )
 
 func run() error {
 	klog.InitFlags(nil)
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(*driverName, driver.Version)
+		return nil
+	}
 
 	opts := driver.DriverOptions{
 		Name:           *driverName,
