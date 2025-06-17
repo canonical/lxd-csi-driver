@@ -15,9 +15,9 @@ import (
 	"github.com/canonical/lxd-csi-driver/internal/utils"
 )
 
-// driverVersion is the version of the CSI driver.
+// Version is the version of the CSI driver.
 // It is set during the build.
-const driverVersion = "dev"
+var Version = "dev"
 
 // driverFileSystemMountPath is the path where the CSI driver mounts
 // the filesystem volumes.
@@ -92,7 +92,7 @@ type Driver struct {
 func NewDriver(opts DriverOptions) *Driver {
 	d := &Driver{
 		name:           opts.Name,
-		version:        driverVersion,
+		version:        Version,
 		endpoint:       opts.Endpoint,
 		devLXDEndpoint: opts.DevLXDEndpoint,
 		nodeID:         opts.NodeID,
