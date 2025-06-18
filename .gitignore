@@ -1,0 +1,8 @@
+# Temporarily ignore symlink to LXD.
+/lxd
+
+# Ignore generated rocks.
+/*.rock
+
+# Ignore generated binaries.
+/lxd-csi

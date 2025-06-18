@@ -1,0 +1,42 @@
+name: lxd-csi
+base: bare
+build-base: ubuntu@24.04
+version: 0.0.1
+license: AGPL-3.0
+summary: Kubernetes CSI driver for LXD
+description: |
+  A container storage interface (CSI) driver for LXD,
+  which allows Kubernetes to access LXD storage subsystems.
+
+platforms:
+  amd64:
+  arm64:
+
+parts:
+  lxd-csi:
+    plugin: nil
+    source: .
+    build-packages:
+      - golang
+      - git
+    stage-packages:
+      - util-linux # Required for "findmnt".
+    override-pull: |
+      craftctl default
+
+      # Copy the LXD source code, which contains the devLXD endpoints that
+      # have not landed in the LXD repository yet.
+      rm -rf lxd
+      git clone https://github.com/MusicDin/lxd --depth 1 --branch feat/devlxd-csi-v2
+    override-build: |
+      mkdir -p $CRAFT_PART_INSTALL/bin
+      go build \
+        -ldflags "-s -w -X github.com/canonical/lxd-csi-driver/internal/driver.Version=$CRAFT_PROJECT_VERSION" \
+        -trimpath \
+        -o $CRAFT_PART_INSTALL/bin/lxd-csi ./cmd/lxd-csi
+      chmod +x $CRAFT_PART_INSTALL/bin/lxd-csi
+
+services:
+  lxd-csi:
+    override: replace
+    command: /bin/lxd-csi

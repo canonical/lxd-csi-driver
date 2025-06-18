@@ -1,0 +1,12 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: lxd-csi
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: lxd.csi.canonical.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+parameters: {}
+  # Specify the name of the LXD storage pool to use for provisioning volumes.
+  #storagePool: "my-storage-pool"

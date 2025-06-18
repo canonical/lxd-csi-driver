@@ -1,0 +1,37 @@
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+name: Build LXD CSI image
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: canonical/craft-actions/rockcraft-pack@main
+      id: rockcraft
+      with:
+        rockcraft-channel: stable
+        verbosity: debug # quiet, brief, debug, trace
+
+    - name: Lowercase image name
+      run: |
+        echo "IMAGE_NAME=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+    - name: Tag and push to GHCR
+      run: |
+        docker import "${{ steps.rockcraft.outputs.rock }}" ${{ env.IMAGE_NAME }}:latest
+        echo ${{ github.token }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        docker push ${{ env.IMAGE_NAME }}:latest

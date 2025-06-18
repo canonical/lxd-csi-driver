@@ -1,0 +1,136 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  labels:
+    app: lxd-csi-controller
+  name: lxd-csi-controller
+  namespace: lxd-csi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lxd-csi-controller
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: lxd-csi-controller
+    spec:
+      serviceAccountName: lxd-csi-controller-sa
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        kubernetes.io/os: linux
+      # Deploy controller only to the control plane nodes.
+      # Use affinity instead of nodeSelector as some Kubernetes
+      # flavors use label values while others leave it empty.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: Exists
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/controlplane"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        # Provisions volumes by calling CreateVolume and DeleteVolume
+        # functions of CSI drivers.
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v5.0.2
+          imagePullPolicy: IfNotPresent
+          args:
+            - -v=2
+            - --csi-address=$(CSI_ADDRESS)
+            - --feature-gates=Topology=true
+            - --timeout=1200s
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          resources:
+            limits:
+              memory: 400Mi
+            requests:
+              cpu: 10m
+              memory: 20Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+        # Attaches/detaches volumes to/from nodes by calling ControllerPublish
+        # and ControllerUnpublish functions of CSI drivers.
+        - name: csi-attacher
+          image: registry.k8s.io/sig-storage/csi-attacher:v4.8.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-v=2"
+            - "--csi-address=$(CSI_ADDRESS)"
+            - "--timeout=1200s"
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          resources:
+            limits:
+              memory: 400Mi
+            requests:
+              cpu: 10m
+              memory: 20Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+        # CSI controller.
+        - name: lxd-csi-controller
+          image: ghcr.io/canonical/lxd-csi:0.0.1
+          imagePullPolicy: Always
+          args:
+            - "--node-id=$(NODE_ID)"
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--devlxd-endpoint=$(DEVLXD_ENDPOINT)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: DEVLXD_ENDPOINT
+              value: unix:///dev/lxd/sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: devlxd-socket
+              mountPath: /dev/lxd/sock
+          resources:
+            limits:
+              memory: 200Mi
+            requests:
+              cpu: 10m
+              memory: 20Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: devlxd-socket
+          hostPath:
+            path: /dev/lxd/sock
+            type: Socket
+        - name: socket-dir
+          emptyDir: {}
