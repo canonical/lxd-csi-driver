@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strconv"
 
 	"github.com/canonical/lxd/lxd/locking"
 	"github.com/canonical/lxd/shared/api"
@@ -161,7 +162,68 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	if contentSource != nil {
-		return nil, status.Error(codes.Unimplemented, "CreateVolume: Volume source is not supported yet")
+		var sourcePoolName string
+		var sourceVolName string
+
+		switch contentSource.Type.(type) {
+		case *csi.VolumeContentSource_Snapshot:
+			return nil, status.Error(codes.Unimplemented, "CreateVolume: Volume snapshot source is not supported yet")
+		case *csi.VolumeContentSource_Volume:
+			sourceVolID := contentSource.GetVolume().VolumeId
+			sourcePoolName, sourceVolName, err = splitVolumeID(sourceVolID)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: %v", err)
+			}
+
+			sourceVol, _, err := client.GetStoragePoolVolume(sourcePoolName, "custom", sourceVolName)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to retrieve source snapshot: %v", err)
+			}
+
+			// Check if the existing snapshot matches the volume requirements.
+			if sourceVol.ContentType != contentType {
+				return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Content type %q of volume %q does not match the requested volume content type %q", sourceVol.ContentType, sourceVolName, contentType)
+			}
+
+			sourceVolSize := sourceVol.Config["size"]
+			if sourceVolSize == "" {
+				return nil, status.Errorf(codes.FailedPrecondition, "CreateVolume: Cannot determine size of the existing volume %q: Size is not configured", sourceVolName)
+			}
+
+			sourceVolSizeBytes, err := strconv.ParseInt(sourceVolSize, 10, 64)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to parse size %q of the existing volume %q: %v", sourceVolSize, sourceVolName, err)
+			}
+
+			if sourceVolSizeBytes > sizeBytes {
+				return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Volume size %d is lower then the existing volume size %d", sizeBytes, sourceVolSizeBytes)
+			}
+		default:
+			return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Unsupported volume content source %q", contentSource.String())
+		}
+
+		// Create volume from a copy.
+		req := api.DevLXDStorageVolumesPost{
+			Name:        volName,
+			Type:        "custom", // Only custom volumes can be managed by the CSI.
+			ContentType: contentType,
+			Source: api.StorageVolumeSource{
+				Type: api.SourceTypeCopy,
+				Pool: sourcePoolName,
+				Name: sourceVolName,
+			},
+			DevLXDStorageVolumePut: api.DevLXDStorageVolumePut{
+				Description: c.driver.VolumeDescription(),
+				Config: map[string]string{
+					"size": fmt.Sprintf("%d", sizeBytes),
+				},
+			},
+		}
+
+		err = client.CreateStoragePoolVolume(poolName, req)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to create volume %q in storage pool %q from volume %q in storage pool %q: %v", volName, poolName, sourceVolName, sourcePoolName, err)
+		}
 	} else {
 		// Volume source content is not provided. Create a new volume.
 		req := api.DevLXDStorageVolumesPost{
