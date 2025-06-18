@@ -95,6 +95,31 @@ spec:
             capabilities:
               drop:
                 - ALL
+        # Resizes volumes by calling ControllerExpandVolume functions of CSI driver
+        # when user requests more storage for a PVC.
+        - name: csi-resizer
+          image: registry.k8s.io/sig-storage/csi-resizer:v1.13.2
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-v=2"
+            - "--csi-address=$(CSI_ADDRESS)"
+            - "--timeout=1200s"
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          resources:
+            limits:
+              memory: 400Mi
+            requests:
+              cpu: 10m
+              memory: 20Mi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
         # CSI controller.
         - name: lxd-csi-controller
           image: ghcr.io/canonical/lxd-csi:0.0.1
