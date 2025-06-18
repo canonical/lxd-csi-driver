@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strconv"
 
 	"github.com/canonical/lxd/lxd/locking"
 	"github.com/canonical/lxd/shared/api"
+	"github.com/canonical/lxd/shared/units"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -310,4 +312,77 @@ func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *c
 	}
 
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
+}
+
+func (c *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+	client := c.driver.devLXD
+
+	poolName, volName, err := splitVolumeID(req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ExpandVolume: %v", err)
+	}
+
+	err = ValidateVolumeCapabilities(req.VolumeCapability)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ExpandVolume: %v", err)
+	}
+
+	unlock, err := locking.Lock(ctx, req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ExpandVolume: Failed to obtain lock %q: %v", req.VolumeId, err)
+	}
+
+	defer unlock()
+
+	vol, etag, err := client.GetStoragePoolVolume(poolName, "custom", volName)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ExpandVolume: %v", err)
+	}
+
+	oldSize := vol.Config["size"]
+	if oldSize == "" {
+		return nil, status.Errorf(codes.Internal, "ExpandVolume: Volume %q in storage pool %q does not have size configured", volName, poolName)
+	}
+
+	oldSizeBytes, err := strconv.ParseInt(oldSize, 10, 64)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ExpandVolume: Failed to parse current volume size %q for volume %q in storage pool %q: %v", oldSizeBytes, volName, poolName, err)
+	}
+
+	newSizeBytes := req.CapacityRange.RequiredBytes
+
+	oldSizePretty := units.GetByteSizeStringIEC(oldSizeBytes, 2)
+	newSizePretty := units.GetByteSizeStringIEC(req.CapacityRange.RequiredBytes, 2)
+
+	// Currently, volume shrinking is currently not supported by Kubernetes.
+	// However, to be on the safe side, we double check that the request is
+	// not trying to shrink the volume size.
+	if newSizeBytes < oldSizeBytes {
+		return nil, status.Errorf(codes.InvalidArgument, "ExpandVolume: Requested size %q is less than the current size %q", newSizePretty, oldSizePretty)
+	}
+
+	if newSizeBytes == oldSizeBytes {
+		// Nothing to do. New size equals the already configured size.
+		return &csi.ControllerExpandVolumeResponse{
+			CapacityBytes:         newSizeBytes,
+			NodeExpansionRequired: false,
+		}, nil
+	}
+
+	// Expand volume.
+	volReq := api.DevLXDStorageVolumePut{
+		Config: map[string]string{
+			"size": fmt.Sprintf("%d", newSizeBytes),
+		},
+	}
+
+	err = client.UpdateStoragePoolVolume(poolName, "custom", volName, volReq, etag)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ExpandVolume: %v", err)
+	}
+
+	return &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:         newSizeBytes,
+		NodeExpansionRequired: false,
+	}, nil
 }
