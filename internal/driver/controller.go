@@ -158,7 +158,35 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	if vol != nil {
-		return nil, status.Errorf(codes.AlreadyExists, "CreateVolume: Volume with the same name %s already exist", volName)
+		// Volume already exists. Return successful response if it matches
+		// the requested parameters to ensure idempotency.
+		volSize := vol.Config["size"]
+		if volSize == "" {
+			return nil, status.Errorf(codes.AlreadyExists, "CreateVolume: Volume with the same name %s but no size already exist", volName)
+		}
+
+		volSizeBytes, err := strconv.ParseInt(volSize, 10, 64)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to parse volume size %q for volume %q in storage pool %q: %v", volSize, volName, poolName, err)
+		}
+
+		if volSizeBytes != sizeBytes {
+			return nil, status.Errorf(codes.AlreadyExists, "CreateVolume Volume with the same name %s but with different size already exist", volName)
+		}
+
+		return &csi.CreateVolumeResponse{
+			Volume: &csi.Volume{
+				VolumeId:      volumeID,
+				CapacityBytes: sizeBytes,
+				VolumeContext: parameters,
+				ContentSource: contentSource,
+				AccessibleTopology: []*csi.Topology{
+					{
+						Segments: topologySegments,
+					},
+				},
+			},
+		}, nil
 	}
 
 	if contentSource != nil {
