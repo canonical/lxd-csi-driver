@@ -1,0 +1,68 @@
+name: Build and Publish Rocks to GHCR
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  tag-rocks:
+    uses: ./.github/workflows/rocks-tag.yaml
+
+  get-runners:
+    runs-on: ubuntu-latest
+    outputs:
+      arch-map: ${{ steps.set-map.outputs.arch-map }}
+    steps:
+      - id: set-map
+        run: |
+          echo 'arch-map={"amd64":["ubuntu-24.04"],"arm64":["ubuntu-24.04-arm"]}' >> $GITHUB_OUTPUT
+
+  build:
+    needs: [get-runners, tag-rocks]
+    strategy:
+      matrix:
+        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+    uses: canonical/oci-factory/.github/workflows/Build-Rock.yaml@main
+    with:
+      rock-repo: ${{ github.repository }}
+      rock-repo-commit: ${{ github.ref }}
+      rockfile-directory: ${{ matrix.rock.location }}
+      oci-archive-name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
+      arch-map: ${{ needs.get-runners.outputs.arch-map }}
+
+  test:
+    needs: [tag-rocks, build]
+    if: |
+      always() && needs.tag-rocks.result == 'success' && needs.build.result == 'success'
+    strategy:
+      matrix:
+        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+    uses: canonical/oci-factory/.github/workflows/Test-Rock.yaml@main
+    with:
+      oci-archive-name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
+    secrets:
+      host-github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload:
+    needs: [tag-rocks, test]
+    if: |
+      always() && needs.test.result == 'success' &&
+      needs.tag-rocks.result == 'success'
+    strategy:
+      matrix:
+        rock: ${{ fromJSON(needs.tag-rocks.outputs.json_result) }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Upload Rock to GHCR
+        uses: canonical/oci-factory/.github/actions/upload-rock@main
+        with:
+          artifact_name: ${{ matrix.rock.name }}_${{ matrix.rock.tag }}
+          tags: ${{ matrix.rock.tag }}
+          name: ${{ github.repository }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
