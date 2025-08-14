@@ -3,8 +3,9 @@ package main
 import (
 	"flag"
 
-	"github.com/canonical/lxd-csi-driver/internal/driver"
 	"k8s.io/klog/v2"
+
+	"github.com/canonical/lxd-csi-driver/internal/driver"
 )
 
 var (
