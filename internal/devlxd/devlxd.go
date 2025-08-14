@@ -12,6 +12,7 @@ import (
 
 const devLXDUserAgent = "lxd-csi-driver"
 
+// Connect establishes a connection to the devLXD server at the specified endpoint.
 func Connect(endpoint string) (lxdClient.DevLXDServer, error) {
 	// Parse and verify devLXD address.
 	_, socket, err := utils.ParseUnixSocketURL(endpoint)

@@ -26,6 +26,7 @@ type DriverOptions struct {
 	NodeID string
 }
 
+// Driver represents a CSI driver for LXD.
 type Driver struct {
 	// General driver information.
 	name     string
@@ -50,6 +51,7 @@ func NewDriver(opts DriverOptions) *Driver {
 	return d
 }
 
+// Run starts the CSI driver.
 func (d *Driver) Run() error {
 	return nil
 }
