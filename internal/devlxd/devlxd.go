@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	lxdClient "github.com/canonical/lxd/client"
 	"k8s.io/klog/v2"
 
 	"github.com/canonical/lxd-csi-driver/internal/utils"
+	lxdClient "github.com/canonical/lxd/client"
 )
 
 const devLXDUserAgent = "lxd-csi-driver"
