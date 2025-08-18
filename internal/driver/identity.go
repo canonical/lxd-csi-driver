@@ -37,3 +37,18 @@ func (i *identityServer) GetPluginInfo(ctx context.Context, req *csi.GetPluginIn
 		VendorVersion: i.driver.version,
 	}, nil
 }
+
+// GetPluginCapabilities retrieves the plugin capabilities.
+func (i *identityServer) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
+	return &csi.GetPluginCapabilitiesResponse{
+		Capabilities: []*csi.PluginCapability{
+			{
+				Type: &csi.PluginCapability_Service_{
+					Service: &csi.PluginCapability_Service{
+						Type: csi.PluginCapability_Service_CONTROLLER_SERVICE,
+					},
+				},
+			},
+		},
+	}, nil
+}
