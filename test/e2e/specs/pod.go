@@ -270,7 +270,7 @@ func (p Pod) WaitRunning(ctx context.Context, timeout time.Duration) {
 	gomega.Eventually(podPhase).WithTimeout(timeout).Should(gomega.Equal(corev1.PodRunning), "Pod %q is not running after %s", p.PrettyName(), timeout)
 }
 
-// WaitGone waits until the Pod is no longer present in the Kuberentes cluster.
+// WaitGone waits until the Pod is no longer present in the Kubernetes cluster.
 func (p Pod) WaitGone(ctx context.Context, timeout time.Duration) {
 	ginkgo.By("Wait for Pod " + p.PrettyName() + " to be gone")
 	podGone := func() bool {
