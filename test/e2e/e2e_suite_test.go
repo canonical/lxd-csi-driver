@@ -204,3 +204,99 @@ var _ = ginkgo.Describe("[Volume read/write]", func() {
 		gomega.Expect(data).To(gomega.Equal(msg))
 	})
 })
+
+var _ = ginkgo.Describe("[Volume release]", func() {
+	var ctx context.Context
+	var cfg *rest.Config
+	var client *kubernetes.Clientset
+	var namespace = "default"
+
+	ginkgo.BeforeEach(func() {
+		ctx = context.Background()
+		cfg, client = createClient()
+	})
+
+	ginkgo.It("Volume data should be retained when only pod is recreated", func() {
+		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool())
+		sc.Create(ctx)
+		defer sc.ForceDelete(ctx)
+
+		// Create FS PVC.
+		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
+			WithStorageClassName(sc.Name)
+		pvc.Create(ctx)
+		defer pvc.ForceDelete(ctx)
+
+		// Create a pod.
+		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
+		pod.Create(ctx)
+		defer pod.ForceDelete(ctx)
+		pod.WaitReady(ctx, 60*time.Second)
+
+		// Write to the volume.
+		path := "/mnt/test/test.txt"
+		msg := []byte("Hello, LXD CSI!")
+		err := pod.WriteFile(ctx, cfg, path, msg)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		// Read back the data.
+		data, err := pod.ReadFile(ctx, cfg, path)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(data).To(gomega.Equal(msg))
+
+		// Recreate the pod.
+		pod.Delete(ctx)
+		pod.WaitGone(ctx, 60*time.Second)
+		pod.Create(ctx)
+		pod.WaitReady(ctx, 30*time.Second)
+		pvc.WaitBound(ctx, 30*time.Second)
+
+		// Ensure the data is still there.
+		data, err = pod.ReadFile(ctx, cfg, path)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(data).To(gomega.Equal(msg))
+	})
+
+	ginkgo.It("Volume data should be gone when PVC is recreated", func() {
+		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool())
+		sc.Create(ctx)
+		defer sc.ForceDelete(ctx)
+
+		// Create FS PVC.
+		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
+			WithStorageClassName(sc.Name)
+		pvc.Create(ctx)
+		defer pvc.ForceDelete(ctx)
+
+		// Create a pod.
+		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
+		pod.Create(ctx)
+		defer pod.ForceDelete(ctx)
+		pod.WaitReady(ctx, 60*time.Second)
+
+		// Write to the volume.
+		path := "/mnt/test/test.txt"
+		msg := []byte("Hello, LXD CSI!")
+		err := pod.WriteFile(ctx, cfg, path, msg)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		// Read back the data.
+		data, err := pod.ReadFile(ctx, cfg, path)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(data).To(gomega.Equal(msg))
+
+		// Recreate the pod and PVC.
+		pod.Delete(ctx)
+		pod.WaitGone(ctx, 60*time.Second)
+		pvc.Delete(ctx)
+		pvc.WaitGone(ctx, 30*time.Second)
+		pvc.Create(ctx)
+		pod.Create(ctx)
+		pod.WaitReady(ctx, 60*time.Second)
+		pvc.WaitBound(ctx, 30*time.Second)
+
+		// Ensure the data is no longer there.
+		_, err = pod.ReadFile(ctx, cfg, path)
+		gomega.Expect(err).To(gomega.HaveOccurred())
+	})
+})
