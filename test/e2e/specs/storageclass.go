@@ -86,7 +86,7 @@ func (sc StorageClass) WithDefault(isDefault bool) StorageClass {
 
 // State returns the actual state of the StorageClass.
 func (sc StorageClass) State(ctx context.Context) (*storagev1.StorageClass, error) {
-	return sc.client.StorageV1().StorageClasses().Create(ctx, &sc.StorageClass, metav1.CreateOptions{})
+	return sc.client.StorageV1().StorageClasses().Get(ctx, sc.Name, metav1.GetOptions{})
 }
 
 // Create creates the StorageClass in the Kubernetes cluster.
