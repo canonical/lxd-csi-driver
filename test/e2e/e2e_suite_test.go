@@ -133,3 +133,74 @@ var _ = ginkgo.Describe("[Volume binding mode] ", func() {
 		pvcBlock.WaitBound(ctx, 30*time.Second)
 	})
 })
+
+var _ = ginkgo.Describe("[Volume read/write]", func() {
+	var ctx context.Context
+	var cfg *rest.Config
+	var client *kubernetes.Clientset
+	var namespace = "default"
+
+	ginkgo.BeforeEach(func() {
+		ctx = context.Background()
+		cfg, client = createClient()
+	})
+
+	ginkgo.It("Write and read FS volume", func() {
+		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool())
+		sc.Create(ctx)
+		defer sc.ForceDelete(ctx)
+
+		// Create FS PVC.
+		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
+			WithStorageClassName(sc.Name)
+		pvc.Create(ctx)
+		defer pvc.ForceDelete(ctx)
+
+		// Create a pod that uses the PVC.
+		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
+		pod.Create(ctx)
+		defer pod.ForceDelete(ctx)
+		pod.WaitReady(ctx, 60*time.Second)
+
+		// Write to the volume.
+		path := "/mnt/test/test.txt"
+		msg := []byte("This is a test of an attached FS volume.")
+		err := pod.WriteFile(ctx, cfg, path, msg)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		// Read back the data.
+		data, err := pod.ReadFile(ctx, cfg, path)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(data).To(gomega.Equal(msg))
+	})
+
+	ginkgo.It("Write and read block volume", func() {
+		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool())
+		sc.Create(ctx)
+		defer sc.ForceDelete(ctx)
+
+		// Create block PVC.
+		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
+			WithStorageClassName(sc.Name).
+			WithVolumeMode(corev1.PersistentVolumeBlock)
+		pvc.Create(ctx)
+		defer pvc.ForceDelete(ctx)
+
+		// Create a pod that uses the PVC.
+		dev := "/dev/vda42"
+		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, dev)
+		pod.Create(ctx)
+		defer pod.ForceDelete(ctx)
+		pod.WaitReady(ctx, 30*time.Second)
+
+		// Write to the volume.
+		msg := []byte("This is a test of an attached FS volume.")
+		err := pod.WriteDevice(ctx, cfg, dev, msg)
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+		// Read back the data.
+		data, err := pod.ReadDevice(ctx, cfg, dev, len(msg))
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(data).To(gomega.Equal(msg))
+	})
+})
