@@ -28,3 +28,9 @@ func createClient() (*rest.Config, *kubernetes.Clientset) {
 
 	return config, client
 }
+
+func getTestLXDStoragePool() string {
+	path := os.Getenv("LXD_STORAGE_POOL")
+	gomega.Expect(path).NotTo(gomega.BeEmpty(), "LXD_STORAGE_POOL environment variable must be set")
+	return path
+}
