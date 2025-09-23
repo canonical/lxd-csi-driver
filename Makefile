@@ -1,6 +1,7 @@
 REGISTRY=ghcr.io
 IMAGE=canonical/lxd-csi
-VERSION=0.0.1
+# Use latest-edge for development builds to match what is in deploy/* manifests.
+VERSION=latest-edge
 
 build:
 	@echo "> Building LXD CSI ...";
