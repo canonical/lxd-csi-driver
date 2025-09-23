@@ -88,7 +88,7 @@ jobs:
   publish:
     runs-on: ubuntu-24.04
     needs: e2e-tests
-    if: ${{ github.ref_name == 'main' }}
+    if: ${{ github.repository == 'canonical/lxd-csi-driver' && github.ref_name == 'main' }}
     permissions:
       contents: read
       packages: write
