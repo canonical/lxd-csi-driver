@@ -188,6 +188,7 @@ lxdInstanceCreate() {
         --config limits.cpu=4 \
         --config limits.memory=4GB \
         --device root,size=16GiB \
+        --config security.devlxd.images=true \
         --config security.devlxd.management.volumes=true \
         ${opts}
 }
