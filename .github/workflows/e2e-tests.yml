@@ -1,0 +1,93 @@
+name: E2E Test
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # Make sure bash is always invoked with `-eo pipefail`
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+    shell: bash
+
+env:
+  K8S_CLUSTER_NAME: k8s
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'schedule' || github.repository == 'canonical/lxd-csi-driver' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Build CSI driver image
+        run: |
+          set -e
+          make image-export
+
+      # Disable Docker to avoid conflicts with LXD.
+      - name: Disable Docker
+        uses: canonical/lxd/.github/actions/disable-docker@main
+
+      - name: Install Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Install Deps
+        run: |
+          set -e
+          sudo snap install jq
+          sudo snap install helm --classic
+          sudo snap install kubectl --classic
+
+      - name: Setup LXD
+        run: |
+          set -e
+          sudo snap install lxd --channel=latest/edge
+          sudo lxd waitready --timeout 60
+          sudo lxd init --auto --network-port=8443 --network-address=localhost
+          sudo chmod 777 /var/snap/lxd/common/lxd/unix.socket
+
+      - name: Set Kubeconfig path
+        run: |
+          echo "K8S_KUBECONFIG_PATH=${HOME}/.kube/config" >> $GITHUB_ENV
+
+      - name: Deploy Kubernetes cluster
+        env:
+          # Use locally built image from "Build CSI driver image" step.
+          K8S_CSI_IMAGE_PATH: lxd-csi-driver.tar
+          K8S_NODE_COUNT: "2"
+        run: |
+          set -e
+          ./scripts/k8s.sh deploy
+
+      - name: Print cluster info
+        run: |
+          set -e
+          echo "===> Print nodes"
+          kubectl get nodes
+
+          echo "===> Print pods"
+          kubectl get pods -A
+
+      - name: Run E2E tests
+        env:
+          LXD_STORAGE_POOL: "${{ env.K8S_CLUSTER_NAME }}-storage-pool"
+        run: |
+          set -e
+          cd test/e2e
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.25.3
+          ginkgo -v --timeout 30m .
+
+      - name: Tmate debugging session (gh-hosted)
+        if: failure()
+        uses: mxschmitt/action-tmate@7b6a61a73bbb9793cb80ad69b8dd8ac19261834c # v3.22
+        timeout-minutes: 60

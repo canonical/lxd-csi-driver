@@ -1,0 +1,9 @@
+---
+kind: CSIDriver
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: lxd.csi.canonical.com
+spec:
+  attachRequired: true
+  volumeLifecycleModes:
+    - Persistent
