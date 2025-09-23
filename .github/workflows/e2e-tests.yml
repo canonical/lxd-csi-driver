@@ -28,6 +28,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
+      - name: Install Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'go.mod'
+
       - name: Build CSI driver image
         run: |
           set -e
@@ -36,11 +41,6 @@ jobs:
       # Disable Docker to avoid conflicts with LXD.
       - name: Disable Docker
         uses: canonical/lxd/.github/actions/disable-docker@main
-
-      - name: Install Go
-        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
-        with:
-          go-version-file: 'go.mod'
 
       - name: Install Deps
         run: |
@@ -88,10 +88,18 @@ jobs:
   publish:
     runs-on: ubuntu-24.04
     needs: e2e-tests
-    if: ${{ github.ref_name == 'main' }}
+    if: ${{ github.repository == 'canonical/lxd-csi-driver' && github.ref_name == 'main' }}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'go.mod'
 
       - name: Build image
         run: |
