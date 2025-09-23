@@ -18,6 +18,7 @@ defaults:
 
 env:
   K8S_CLUSTER_NAME: k8s
+  CONTAINER_REGISTRY: ghcr.io
 
 jobs:
   e2e-tests:
@@ -86,3 +87,20 @@ jobs:
           cd test/e2e
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.25.3
           ginkgo -v --timeout 30m .
+
+  # Publish container image to GHCR if tests passed and we are on main branch.
+  publish:
+    runs-on: ubuntu-24.04
+    needs: e2e-tests
+    if: ${{ github.ref_name == 'main' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          push: true
+          tags: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}:latest-edge
