@@ -44,7 +44,6 @@ jobs:
       - name: Install Deps
         run: |
           set -e
-          sudo snap install jq
           sudo snap install helm --classic
           sudo snap install kubectl --classic
 
