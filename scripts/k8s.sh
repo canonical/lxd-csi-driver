@@ -21,16 +21,19 @@ setEnv() {
     # Precheck kubectl is installed.
     if ! command -v kubectl &> /dev/null; then
         echo "Error: kubectl is not installed. Use 'snap install kubectl --classic' to install it."
+        exit 1
     fi
 
     # Precheck lxc is installed.
     if ! command -v lxc &> /dev/null; then
         echo "Error: lxc is not installed"
+        exit 1
     fi
 
     # Precheck that LXD is accessible and trusts us.
     if [ $(lxc query /1.0 | jq -r .auth) != "trusted" ]; then
         echo "Error: The LXD server is either not accessible or does not trust the client."
+        exit 1
     fi
 
     K8S_CLUSTER_NAME="${1:-${K8S_CLUSTER_NAME:-}}"

@@ -158,7 +158,7 @@ func (pvc PersistentVolumeClaim) WaitSize(ctx context.Context, size string, time
 	gomega.Eventually(pvcSize).WithTimeout(timeout).Should(gomega.Equal(size), "PVC %q size is not %q after %s", pvc.PrettyName(), size, timeout)
 }
 
-// WaitGone waits until the PVC is no longer present in the Kuberentes cluster.
+// WaitGone waits until the PVC is no longer present in the Kubernetes cluster.
 func (pvc PersistentVolumeClaim) WaitGone(ctx context.Context, timeout time.Duration) {
 	ginkgo.By("Wait for PersistentVolumeClaim " + pvc.PrettyName() + " to be gone")
 	podGone := func() bool {
