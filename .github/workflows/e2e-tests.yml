@@ -86,8 +86,3 @@ jobs:
           cd test/e2e
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.25.3
           ginkgo -v --timeout 30m .
-
-      - name: Tmate debugging session (gh-hosted)
-        if: failure()
-        uses: mxschmitt/action-tmate@7b6a61a73bbb9793cb80ad69b8dd8ac19261834c # v3.22
-        timeout-minutes: 60
