@@ -45,17 +45,13 @@ jobs:
       - name: Install Deps
         run: |
           set -e
-          sudo snap install jq
           sudo snap install helm --classic
           sudo snap install kubectl --classic
 
       - name: Setup LXD
-        run: |
-          set -e
-          sudo snap install lxd --channel=latest/edge
-          sudo lxd waitready --timeout 60
-          sudo lxd init --auto --network-port=8443 --network-address=localhost
-          sudo chmod 777 /var/snap/lxd/common/lxd/unix.socket
+        uses: canonical/setup-lxd@main
+        with:
+          channel: latest/edge
 
       - name: Set Kubeconfig path
         run: |
