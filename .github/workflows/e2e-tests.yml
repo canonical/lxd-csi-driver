@@ -58,13 +58,12 @@ jobs:
           echo "K8S_KUBECONFIG_PATH=${HOME}/.kube/config" >> $GITHUB_ENV
 
       - name: Deploy Kubernetes cluster
-        env:
-          # Use locally built image from "Build CSI driver image" step.
-          K8S_CSI_IMAGE_PATH: lxd-csi-driver.tar
-          K8S_NODE_COUNT: "2"
-        run: |
-          set -e
-          ./scripts/k8s.sh deploy
+        uses: ./.github/actions/setup-k8s
+        with:
+          k8s-cluster-name: ${{ env.K8S_CLUSTER_NAME }}
+          k8s-node-count: 2
+          k8s-snap-channel: latest/edge
+          k8s-kubeconfig-path: ${{ env.K8S_KUBECONFIG_PATH }}
 
       - name: Print cluster info
         run: |
