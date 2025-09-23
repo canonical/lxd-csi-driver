@@ -1,0 +1,1 @@
+../.github/actions/setup-k8s/k8s.sh
