@@ -1,0 +1,34 @@
+name: Setup Kubernetes
+description: Setup Canonical Kubernetes cluster
+
+inputs:
+  k8s-cluster-name:
+    description: Name of the k8s cluster used as a prefix for various resources
+    default: "k8s"
+    type: string
+  k8s-node-count:
+    description: Number of nodes in the k8s cluster
+    default: 2
+    type: integer
+  k8s-snap-channel:
+    description: Snap channel to use for installing Canonical Kubernetes
+    default: "latest/edge"
+    type: string
+  k8s-kubeconfig-path:
+    description: Path where Kubeconfig file will be stored
+    default: "/home/runner/.kube/config"
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - name: Deploy Kubernetes cluster
+      shell: bash
+      env:
+        K8S_CLUSTER_NAME: ${{ inputs.k8s-cluster-name }}
+        K8S_NODE_COUNT: ${{ inputs.k8s-node-count }}
+        K8S_SNAP_CHANNEL: ${{ inputs.k8s-snap-channel }}
+        K8S_KUBECONFIG_PATH: ${{ inputs.k8s-kubeconfig-path }}
+        K8S_CSI_IMAGE_PATH: lxd-csi-driver.tar
+      run: |
+        ${{ github.action_path }}/k8s.sh deploy

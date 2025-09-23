@@ -12,7 +12,13 @@ source <(
   || { echo "Error: Failed to source bin/helpers from canonical/lxd-ci" >&2; exit 1; }
 )
 
+# Script dir where the script is located.
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+
+# Root dir of the repository.
+ROOT_DIR="$(realpath "${SCRIPT_DIR}/../../..")"
+
+# Temporary directory for job logs.
 JOB_DIR="$(mktemp -d -t lxd-csi-run.XXXXXX)"
 
 # Remove JOB dir on exit while preserving exit code.
@@ -52,7 +58,7 @@ setEnv() {
     # LXD Kubernetes cluster configuration.
     : "${K8S_NODE_COUNT:=1}"
     : "${K8S_SNAP_CHANNEL:=latest/edge}"
-    : "${K8S_KUBECONFIG_PATH:=${SCRIPT_DIR}/../.kube/${K8S_CLUSTER_NAME}.yml}" # Do not use "${HOME}/..." by default to avoid overwriting user's kubeconfig.
+    : "${K8S_KUBECONFIG_PATH:=${ROOT_DIR}/.kube/${K8S_CLUSTER_NAME}.yml}" # Do not use "${HOME}/..." by default to avoid overwriting user's kubeconfig.
     # K8S_CSI_IMAGE_PATH - Used to import locally built CSI image tarball to all cluster nodes.
 
     # LXD instance, storage, and network configuration.
@@ -379,7 +385,7 @@ k8sImportImageTarball() {
 # It creates the necessary namespace and applies the deployment manifests.
 installLXDCSIDriver() {
     local kubeconfigPath="${K8S_KUBECONFIG_PATH}"
-    local csiDeployPath="${SCRIPT_DIR}/../deploy"
+    local csiDeployPath="${ROOT_DIR}/deploy"
     local project="${LXD_PROJECT_NAME}"
     local name="${K8S_CLUSTER_NAME}-lxd-csi"
     local group="${name}-group"
