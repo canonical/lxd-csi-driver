@@ -6,6 +6,12 @@
 
 set -euo pipefail
 
+# Source bin/helpers from canonical/lxd-ci repository.
+source <(
+  curl -fsSL https://raw.githubusercontent.com/canonical/lxd-ci/refs/heads/main/bin/helpers \
+  || { echo "Error: Failed to source bin/helpers from canonical/lxd-ci" >&2; exit 1; }
+)
+
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 JOB_DIR="$(mktemp -d -t lxd-csi-run.XXXXXX)"
 
@@ -115,24 +121,6 @@ jobWaitAll() {
     logs=()
 }
 
-# This is a workaround for snapd bug https://bugs.launchpad.net/snapd/+bug/2104066
-# It creates a systemd override file for snapd to set the environment variable
-# SNAPD_STANDBY_WAIT to 1 minute, which increases the wait time for snapd to
-# come out of standby mode.
-snapdWorkaround() (
-    [ -e /etc/systemd/system/snapd.service.d/override.conf ] && return
-
-    # workaround for https://bugs.launchpad.net/snapd/+bug/2104066
-    mkdir -p /etc/systemd/system/snapd.service.d
-    cat << EOF > /etc/systemd/system/snapd.service.d/override.conf
-# Workaround for https://bugs.launchpad.net/snapd/+bug/2104066
-[Service]
-Environment=SNAPD_STANDBY_WAIT=1m
-EOF
-    systemctl daemon-reload
-    systemctl try-restart snapd.service || true
-)
-
 # lxdProjectCreate creates a new LXD project with the name specified in the environment variable LXD_PROJECT_NAME.
 lxdProjectCreate() {
     local project="${LXD_PROJECT_NAME}"
@@ -191,38 +179,8 @@ lxdInstanceCreate() {
         --config limits.cpu=4 \
         --config limits.memory=4GB \
         --device root,size=16GiB \
-        --config security.devlxd.images=true \
         --config security.devlxd.management.volumes=true \
         ${opts}
-}
-
-# lxdInstanceWait waits for the specified LXD instance to become
-# ready (has process count greater than 0).
-lxdInstanceWait() {
-    local instance="$1"
-    local timeout="${2:-60}"
-    local project="${LXD_PROJECT_NAME}"
-
-    if [ -z "${instance}" ]; then
-        echo "Usage: lxdInstanceWait <instance>" >&2
-        return 1
-    fi
-
-    echo "Waiting instance ${instance} to become ready ..."
-    for j in $(seq 1 "${timeout}"); do
-        local procCount=$(lxc info "${instance}" --project "${project}" | awk '/Processes:/ {print $2}')
-        if [ -n "${procCount}" ] && [ "${procCount}" -gt 0 ]; then
-                echo "Instance ${instance} ready after ${j} seconds."
-                break
-        fi
-
-        if [ "${j}" -eq "${timeout}" ]; then
-                echo "Instance ${instance} still not ready after ${timeout} seconds!"
-                return 1
-        fi
-
-        sleep 1
-    done
 }
 
 # lxdInstanceIP retrieves the IP address of the specified LXD instance.
@@ -278,7 +236,7 @@ k8sSetupNode() {
     fi
 
     lxdInstanceCreate "${instance}"
-    lxdInstanceWait "${instance}"
+    waitInstanceReady "${instance}"
     k8sInstall "${instance}"
 }
 
