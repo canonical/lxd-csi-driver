@@ -51,7 +51,7 @@ setEnv() {
 
     # LXD Kubernetes cluster configuration.
     : "${K8S_NODE_COUNT:=1}"
-    : "${K8S_SNAP_CHANNEL:=1.33-classic/stable}"
+    : "${K8S_SNAP_CHANNEL:=latest/edge}"
     : "${K8S_KUBECONFIG_PATH:=${SCRIPT_DIR}/../.kube/${K8S_CLUSTER_NAME}.yml}" # Do not use "${HOME}/..." by default to avoid overwriting user's kubeconfig.
     # K8S_CSI_IMAGE_PATH - Used to import locally built CSI image tarball to all cluster nodes.
 
