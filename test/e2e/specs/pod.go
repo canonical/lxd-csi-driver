@@ -18,6 +18,8 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+
+	"github.com/canonical/lxd-csi-driver/test/testutils"
 )
 
 const testContainerImage = "busybox:latest"
@@ -32,7 +34,7 @@ type Pod struct {
 func NewPod(client *kubernetes.Clientset, name string, namespace string) Pod {
 	manifest := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      generateName(name),
+			Name:      testutils.GenerateName(name),
 			Namespace: namespace,
 		},
 		Spec: corev1.PodSpec{
