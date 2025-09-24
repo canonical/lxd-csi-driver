@@ -1,0 +1,61 @@
+name: Publish CSI image
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  e2e-tests:
+    needs: tests
+    uses: ./.github/workflows/e2e-tests.yml
+
+  # Publish container image to GHCR if tests passed and we are on main branch.
+  publish:
+    runs-on: ubuntu-24.04
+    needs: e2e-tests
+    if: ${{ github.repository == 'canonical/lxd-csi-driver' && github.ref_name == 'main' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build image
+        run: |
+          set -e
+          make build
+
+      - name: Log in to the container registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          push: true
+          tags: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}:latest-edge
