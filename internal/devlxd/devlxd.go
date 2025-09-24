@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	// devLXDUserAgent is the User-Agent header used when connecting to devLXD.
 	devLXDUserAgent = "lxd-csi-driver"
 )
 
