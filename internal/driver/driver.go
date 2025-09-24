@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/canonical/lxd-csi-driver/internal/devlxd"
+	"github.com/canonical/lxd-csi-driver/internal/fs"
 	"github.com/canonical/lxd-csi-driver/internal/utils"
 	lxdClient "github.com/canonical/lxd/client"
 	"github.com/canonical/lxd/shared/api"
@@ -91,6 +93,9 @@ type Driver struct {
 	// Path to the file containing the bearer token for authenticating with devLXD.
 	devLXDTokenFile string
 
+	// Whether file containing devLXD bearer token needs to be re-read.
+	hasDevLXDTokenChanged bool
+
 	// LXD cluster member where instance is running on.
 	location    string
 	isClustered bool
@@ -122,13 +127,14 @@ func NewDriver(opts DriverOptions) *Driver {
 }
 
 // DevLXDClient returns the connected DevLXD client.
+// If devLXD token has changed, or connection has not been established yet, a new client is returned.
 func (d *Driver) DevLXDClient() (lxdClient.DevLXDServer, error) {
 	// Return connected client if it exists.
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
 	// Return existing client if it exists and the token has not changed.
-	if d.devLXD != nil {
+	if d.devLXD != nil && !d.hasDevLXDTokenChanged {
 		return d.devLXD, nil
 	}
 
@@ -140,10 +146,18 @@ func (d *Driver) DevLXDClient() (lxdClient.DevLXDServer, error) {
 		return nil, fmt.Errorf("Failed reading DevLXD bearer token from file %q: %v", d.devLXDTokenFile, err)
 	}
 
-	// Connect to DevLXD because DevLXD client is not initialized yet.
-	devLXDClient, err = devlxd.Connect(d.devLXDEndpoint, string(tokenBytes))
-	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to devLXD: %v", err)
+	token := string(tokenBytes)
+
+	// If the client is initialized, but the token has changed, update it.
+	if d.devLXD != nil && d.hasDevLXDTokenChanged {
+		// Update client with new token.
+		devLXDClient = d.devLXD.UseBearerToken(token)
+	} else {
+		// Connect to DevLXD because DevLXD client is not initialized yet.
+		devLXDClient, err = devlxd.Connect(d.devLXDEndpoint, token)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to connect to devLXD: %v", err)
+		}
 	}
 
 	// Refresh DevLXD server information.
@@ -162,12 +176,16 @@ func (d *Driver) DevLXDClient() (lxdClient.DevLXDServer, error) {
 	d.devLXD = devLXDClient
 	d.location = info.Location
 	d.isClustered = info.Environment.ServerClustered
+	d.hasDevLXDTokenChanged = false
 
 	return d.devLXD, nil
 }
 
 // Run starts CSI driver gRPC server.
 func (d *Driver) Run() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	klog.InfoS("Starting LXD CSI driver",
 		"name", d.name,
 		"node", d.nodeID,
@@ -178,6 +196,19 @@ func (d *Driver) Run() error {
 	_, err := d.DevLXDClient()
 	if err != nil {
 		return err
+	}
+
+	// Watch for token file changes.
+	handleTokenFileChange := func(path string) {
+		klog.InfoS("DevLXD token file has changed, will re-read it on next operation", "path", path)
+		d.lock.Lock()
+		d.hasDevLXDTokenChanged = true
+		d.lock.Unlock()
+	}
+
+	err = fs.WatchFile(ctx, d.devLXDTokenFile, handleTokenFileChange)
+	if err != nil {
+		return fmt.Errorf("Failed to watch DevLXD token file %q for changes: %v", d.devLXDTokenFile, err)
 	}
 
 	// Construct gRPC unix address.
@@ -204,7 +235,7 @@ func (d *Driver) Run() error {
 	csi.RegisterNodeServer(d.server, NewNodeServer(d))
 
 	// Start gRPC server.
-	klog.Infof("Listening for connections on address %q", url.String())
+	klog.InfoS("Listening for connections", "endpoint", url.String())
 	err = d.server.Serve(listener)
 	if err != nil {
 		return fmt.Errorf("Failed to serve gRPC server: %v", err)

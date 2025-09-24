@@ -3,7 +3,7 @@ module github.com/canonical/lxd-csi-driver
 go 1.24.6
 
 require (
-	github.com/canonical/lxd v0.0.0-20250923093136-759f040d8b21
+	github.com/canonical/lxd v0.0.0-20250926100704-67c48a397530
 	github.com/container-storage-interface/spec v1.11.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/onsi/ginkgo/v2 v2.25.3
