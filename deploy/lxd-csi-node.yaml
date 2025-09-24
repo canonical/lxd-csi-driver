@@ -52,7 +52,7 @@ spec:
               drop:
                 - ALL
         - name: lxd-csi-node
-          image: ghcr.io/canonical/lxd-csi:latest-edge
+          image: ghcr.io/canonical/lxd-csi-driver:latest-edge
           imagePullPolicy: IfNotPresent
           args:
             - "--node-id=$(NODE_NAME)"
