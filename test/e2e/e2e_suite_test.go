@@ -111,7 +111,7 @@ var _ = ginkgo.AfterEach(func() {
 	}
 })
 
-var _ = ginkgo.DescribeTable("[Volume binding mode] ", func(driver string) {
+var _ = ginkgo.DescribeTableSubtree("[Volume binding mode]", func(driver string) {
 	var client *kubernetes.Clientset
 	var namespace = "default"
 
@@ -228,7 +228,7 @@ var _ = ginkgo.DescribeTable("[Volume binding mode] ", func(driver string) {
 	)
 }, getTestLXDStorageDrivers())
 
-var _ = ginkgo.Describe("[Volume read/write]", func(driver string) {
+var _ = ginkgo.DescribeTableSubtree("[Volume read/write]", func(driver string) {
 	var cfg *rest.Config
 	var client *kubernetes.Clientset
 	var namespace = "default"
@@ -325,7 +325,7 @@ var _ = ginkgo.Describe("[Volume read/write]", func(driver string) {
 	)
 }, getTestLXDStorageDrivers())
 
-var _ = ginkgo.Describe("[Volume release]", func(driver string) {
+var _ = ginkgo.DescribeTableSubtree("[Volume release]", func(driver string) {
 	var cfg *rest.Config
 	var client *kubernetes.Clientset
 	var namespace = "default"
@@ -389,7 +389,7 @@ var _ = ginkgo.Describe("[Volume release]", func(driver string) {
 	)
 }, getTestLXDStorageDrivers())
 
-var _ = ginkgo.DescribeTable("[Volume access mode] ", func(driver string) {
+var _ = ginkgo.DescribeTableSubtree("[Volume access mode] ", func(driver string) {
 	var client *kubernetes.Clientset
 	var namespace = "default"
 
