@@ -77,7 +77,7 @@ func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 		mountOptions = append(mountOptions, "ro")
 	}
 
-	mounted, err := fs.IsMounted(targetPath)
+	mounted, err := fs.IsMountPoint(targetPath)
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("NodePublishVolume: %v", err))
 	}
