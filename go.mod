@@ -5,6 +5,7 @@ go 1.24.6
 require (
 	github.com/canonical/lxd v0.0.0-20250923093136-759f040d8b21
 	github.com/container-storage-interface/spec v1.11.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/onsi/ginkgo/v2 v2.25.3
 	github.com/onsi/gomega v1.38.2
 	golang.org/x/sys v0.36.0
