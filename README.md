@@ -11,15 +11,29 @@ This guide demonstrates how to get the LXD CSI driver running in your Kubernetes
 
 ### Requirements
 
-This guide assumes you have a Kubernetes cluster (of any size) running on LXD instances within a dedicated LXD project named `lxd-csi-project`.
+You need a Kubernetes cluster (of any size) that is running on LXD instances within a dedicated LXD project.
+This guide assumes the LXD project is named `lxd-csi-project`.
 It also assumes you have admin permissions in the Kubernetes cluster.
 
 ### Authorization
 
+By default, DevLXD is not allowed to manage storage volumes or attach them to instances.
+You must enable this by setting `security.devlxd.management.volumes` to `true` on all LXD instances
+where CSI will be running.
+
+For example, to enable DevLXD volume management on instance `node-1`, run:
+```sh
+lxc config set node-1 --project lxd-csi-project security.devlxd.management.volumes=true
+```
+
+You can also use an LXD profile to apply this setting to multiple instances at once.
+
 > [!NOTE]
 > LXD CSI is limited to Kubernetes clusters that are running within a single LXD project.
 
-The CSI driver requires a bearer token issued for a DevLXD identity.
+At this point, DevLXD is allowed to access the LXD endpoint for volume management, but CSI still needs to prove it is authorized to perform such actions.
+We will create a DevLXD identity with sufficient permissions and issue a bearer token for it.
+
 The identity must have permissions in the project where the Kubernetes nodes are running to:
 - view the project,
 - manage (view, create, edit, delete) storage volumes,
