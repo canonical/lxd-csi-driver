@@ -41,6 +41,20 @@ func getTestLXDStoragePool() string {
 	return path
 }
 
+var _ = ginkgo.AfterEach(func() {
+	// Provide useful information when test fails.
+	rep := ginkgo.CurrentSpecReport()
+	if rep.Failed() {
+		// Ensure we do not hang waiting for logs.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_, client := createClient()
+		printControllerLogs(ctx, client, "lxd-csi", "lxd-csi-controller", rep.StartTime)
+		printNodeLogs(ctx, client, "lxd-csi", "lxd-csi-node", rep.StartTime)
+	}
+})
+
 var _ = ginkgo.Describe("[Volume binding mode] ", func() {
 	var ctx context.Context
 	var client *kubernetes.Clientset
