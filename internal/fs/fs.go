@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -10,7 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"golang.org/x/sys/unix"
+	"k8s.io/klog/v2"
 	kmount "k8s.io/mount-utils"
 
 	"github.com/canonical/lxd/lxd/storage/filesystem"
@@ -189,6 +192,68 @@ func Unmount(path string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to remove %q: %w", path, err)
 	}
+
+	return nil
+}
+
+// WatchFile sets up a file watcher for the file path and calls provided handler on file change.
+func WatchFile(ctx context.Context, path string, fileChangeHandler func(path string)) error {
+	// Ensure the provided path is clean to avoid potential path mismatch.
+	path = filepath.Clean(path)
+
+	// Resolve symlinks in the provided path.
+	curRealPath, _ := filepath.EvalSymlinks(path)
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("Failed to setup file watcher for path %q: %v", path, err)
+	}
+
+	// Watch the directory of the provided path because Kubernetes uses
+	// symlink swap trick for updating the mounted files.
+	err = watcher.Add(filepath.Dir(path))
+	if err != nil {
+		_ = watcher.Close()
+		return fmt.Errorf("Failed to watch path %q: %v", path, err)
+	}
+
+	// Watch for token file changes.
+	go func() {
+		defer func() { _ = watcher.Close() }()
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					// Event channel closed.
+					klog.ErrorS(errors.New("FSNotify event channel closed"), "Stopped watching file", "path", path)
+					return
+				}
+
+				newRealPath, err := filepath.EvalSymlinks(path)
+				if err != nil {
+					klog.ErrorS(err, "Failed to resolve symlink for watched file", "path", path)
+				}
+
+				// Check if the file was modified or created.
+				isFileContentChanged := filepath.Clean(event.Name) == path && (event.Has(fsnotify.Create) || event.Has(fsnotify.Write))
+
+				// Check if the file symlink changed. This occurs when Kubernetes updates
+				// the mounted secret/config file using the symlink swap trick.
+				isFileSymlinkChanged := newRealPath != "" && newRealPath != curRealPath
+
+				if isFileContentChanged || isFileSymlinkChanged {
+					curRealPath = newRealPath
+					fileChangeHandler(path)
+				}
+			case err, ok := <-watcher.Errors:
+				if ok && err != nil {
+					klog.ErrorS(err, "Error watching file", "path", path)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	return nil
 }

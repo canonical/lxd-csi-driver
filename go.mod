@@ -3,10 +3,12 @@ module github.com/canonical/lxd-csi-driver
 go 1.24.6
 
 require (
-	github.com/canonical/lxd v0.0.0-20250923093136-759f040d8b21
+	github.com/canonical/lxd v0.0.0-20250926100704-67c48a397530
 	github.com/container-storage-interface/spec v1.11.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/onsi/ginkgo/v2 v2.25.3
 	github.com/onsi/gomega v1.38.2
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/sys v0.36.0
 	google.golang.org/grpc v1.75.1
 	google.golang.org/protobuf v1.36.9
@@ -61,6 +63,7 @@ require (
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/pkg/sftp v1.13.9 // indirect
 	github.com/pkg/xattr v0.4.12 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect

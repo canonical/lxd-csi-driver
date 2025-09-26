@@ -37,7 +37,10 @@ func (c *controllerServer) ControllerGetCapabilities(_ context.Context, _ *csi.C
 
 // CreateVolume creates a new volume in the LXD storage pool.
 func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
-	client := c.driver.devLXD
+	client, err := c.driver.DevLXDClient()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "CreateVolume: %v", err)
+	}
 
 	volName := req.Name
 	contentSource := req.VolumeContentSource
@@ -46,7 +49,7 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		return nil, status.Error(codes.InvalidArgument, "CreateVolume: Volume name is required")
 	}
 
-	err := ValidateVolumeCapabilities(req.VolumeCapabilities...)
+	err = ValidateVolumeCapabilities(req.VolumeCapabilities...)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: %v", err)
 	}
@@ -210,7 +213,10 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 // DeleteVolume deletes a volume from the LXD storage pool.
 func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
-	client := c.driver.devLXD
+	client, err := c.driver.DevLXDClient()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: %v", err)
+	}
 
 	target, poolName, volName, err := splitVolumeID(req.VolumeId)
 	if err != nil {
@@ -242,7 +248,10 @@ func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 // ControllerPublishVolume attaches an existing LXD custom volume to a node.
 // If the volume is already attached, the operation is considered successful.
 func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
-	client := c.driver.devLXD
+	client, err := c.driver.DevLXDClient()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: %v", err)
+	}
 
 	target, poolName, volName, err := splitVolumeID(req.VolumeId)
 	if err != nil {
@@ -317,7 +326,10 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 // ControllerUnpublishVolume detaches LXD custom volume from a node.
 // If the volume is not attached, the operation is considered successful.
 func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
-	client := c.driver.devLXD
+	client, err := c.driver.DevLXDClient()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ControllerUnpublishVolume: %v", err)
+	}
 
 	_, _, volName, err := splitVolumeID(req.VolumeId)
 	if err != nil {

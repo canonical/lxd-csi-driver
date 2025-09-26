@@ -1,17 +1,20 @@
 package driver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc"
 	"k8s.io/klog/v2"
 
 	"github.com/canonical/lxd-csi-driver/internal/devlxd"
+	"github.com/canonical/lxd-csi-driver/internal/fs"
 	"github.com/canonical/lxd-csi-driver/internal/utils"
 	lxdClient "github.com/canonical/lxd/client"
 	"github.com/canonical/lxd/shared/api"
@@ -27,9 +30,18 @@ const driverFileSystemMountPath = "/mnt/lxd-csi"
 
 // Default CSI driver configuration values.
 const (
-	DefaultDriverName     = "lxd.csi.canonical.com"
+	// DefaultDriverName is the default name of the CSI driver.
+	DefaultDriverName = "lxd.csi.canonical.com"
+
+	// DefaultDriverEndpoint is the default unix socket path for the CSI driver.
 	DefaultDriverEndpoint = "unix:///tmp/csi.sock"
+
+	// DefaultDevLXDEndpoint is the default unix socket path for connecting to DevLXD.
 	DefaultDevLXDEndpoint = "unix:///dev/lxd/sock"
+
+	// DefaultDevLXDTokenFile is the default path to the file containing the bearer token
+	// for authenticating with devLXD.
+	DefaultDevLXDTokenFile = "/etc/lxd-csi-driver/token"
 )
 
 const (
@@ -83,22 +95,32 @@ type Driver struct {
 	devLXD         lxdClient.DevLXDServer
 	devLXDEndpoint string
 
+	// Path to the file containing the bearer token for authenticating with devLXD.
+	devLXDTokenFile string
+
+	// Whether file containing devLXD bearer token needs to be re-read.
+	hasDevLXDTokenChanged bool
+
 	// LXD cluster member where instance is running on.
 	location    string
 	isClustered bool
 
 	// gRPC server.
 	server *grpc.Server
+
+	// Lock for accessing/modifying driver.
+	lock sync.Mutex
 }
 
 // NewDriver initializes a new CSI driver.
 func NewDriver(opts DriverOptions) *Driver {
 	d := &Driver{
-		name:           opts.Name,
-		version:        driverVersion,
-		endpoint:       opts.Endpoint,
-		devLXDEndpoint: opts.DevLXDEndpoint,
-		nodeID:         opts.NodeID,
+		name:            opts.Name,
+		version:         driverVersion,
+		endpoint:        opts.Endpoint,
+		devLXDEndpoint:  opts.DevLXDEndpoint,
+		devLXDTokenFile: DefaultDevLXDTokenFile,
+		nodeID:          opts.NodeID,
 	}
 
 	d.SetControllerServiceCapabilities(
@@ -109,8 +131,66 @@ func NewDriver(opts DriverOptions) *Driver {
 	return d
 }
 
+// DevLXDClient returns the connected DevLXD client.
+// If devLXD token has changed, or connection has not been established yet, a new client is returned.
+func (d *Driver) DevLXDClient() (lxdClient.DevLXDServer, error) {
+	// Return connected client if it exists.
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	// Return existing client if it exists and the token has not changed.
+	if d.devLXD != nil && !d.hasDevLXDTokenChanged {
+		return d.devLXD, nil
+	}
+
+	var devLXDClient lxdClient.DevLXDServer
+
+	// Read token from the mounted file.
+	tokenBytes, err := os.ReadFile(d.devLXDTokenFile)
+	if err != nil {
+		return nil, fmt.Errorf("Failed reading DevLXD bearer token from file %q: %v", d.devLXDTokenFile, err)
+	}
+
+	token := string(tokenBytes)
+
+	// If the client is initialized, but the token has changed, update it.
+	if d.devLXD != nil && d.hasDevLXDTokenChanged {
+		// Update client with new token.
+		devLXDClient = d.devLXD.UseBearerToken(token)
+	} else {
+		// Connect to DevLXD because DevLXD client is not initialized yet.
+		devLXDClient, err = devlxd.Connect(d.devLXDEndpoint, token)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to connect to devLXD: %v", err)
+		}
+	}
+
+	// Refresh DevLXD server information.
+	info, err := devLXDClient.GetState()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get LXD server info: %v", err)
+	}
+
+	// Fail early if not authenticated.
+	// In addition, this ensures we retrieve actual information whether LXD is clustered or not.
+	// If we are not authenticated, the Environment.ServerClustered field is always false.
+	if info.Auth != api.AuthTrusted {
+		return nil, errors.New("Failed to authenticate with DevLXD server: Client is not trusted")
+	}
+
+	d.devLXD = devLXDClient
+	d.location = info.Location
+	d.isClustered = info.Environment.ServerClustered
+	d.hasDevLXDTokenChanged = false
+
+	return d.devLXD, nil
+}
+
 // Run starts CSI driver gRPC server.
 func (d *Driver) Run() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	klog.InfoS("Starting LXD CSI driver",
 		"name", d.name,
 		"node", d.nodeID,
@@ -118,26 +198,23 @@ func (d *Driver) Run() error {
 	)
 
 	// Connect to devLXD.
-	devLXDClient, err := devlxd.Connect(d.devLXDEndpoint)
+	_, err := d.DevLXDClient()
 	if err != nil {
-		return fmt.Errorf("Failed to connect to devLXD: %v", err)
+		return err
 	}
 
-	info, err := devLXDClient.GetState()
+	// Watch for token file changes.
+	handleTokenFileChange := func(path string) {
+		klog.InfoS("DevLXD token file has changed, will re-read it on next operation", "path", path)
+		d.lock.Lock()
+		d.hasDevLXDTokenChanged = true
+		d.lock.Unlock()
+	}
+
+	err = fs.WatchFile(ctx, d.devLXDTokenFile, handleTokenFileChange)
 	if err != nil {
-		return fmt.Errorf("Failed to get LXD server info: %v", err)
+		return fmt.Errorf("Failed to watch DevLXD token file %q for changes: %v", d.devLXDTokenFile, err)
 	}
-
-	// Fail early if not authenticated.
-	// In addition, this ensures we retrieve actual information whether LXD is clustered or not.
-	// If we are not authenticated, the Environment.ServerClustered field is always false.
-	if info.Auth != api.AuthTrusted {
-		return errors.New("Failed to authenticate with DevLXD server: Client is not trusted")
-	}
-
-	d.devLXD = devLXDClient
-	d.location = info.Location
-	d.isClustered = info.Environment.ServerClustered
 
 	// Construct gRPC unix address.
 	url, socket, err := utils.ParseUnixSocketURL(d.endpoint)
@@ -163,7 +240,7 @@ func (d *Driver) Run() error {
 	csi.RegisterNodeServer(d.server, NewNodeServer(d))
 
 	// Start gRPC server.
-	klog.Infof("Listening for connections on address %q", url.String())
+	klog.InfoS("Listening for connections", "endpoint", url.String())
 	err = d.server.Serve(listener)
 	if err != nil {
 		return fmt.Errorf("Failed to serve gRPC server: %v", err)
