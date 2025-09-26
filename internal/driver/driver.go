@@ -30,8 +30,13 @@ const driverFileSystemMountPath = "/mnt/lxd-csi"
 
 // Default CSI driver configuration values.
 const (
-	DefaultDriverName     = "lxd.csi.canonical.com"
+	// DefaultDriverName is the default name of the CSI driver.
+	DefaultDriverName = "lxd.csi.canonical.com"
+
+	// DefaultDriverEndpoint is the default unix socket path for the CSI driver.
 	DefaultDriverEndpoint = "unix:///tmp/csi.sock"
+
+	// DefaultDevLXDEndpoint is the default unix socket path for connecting to DevLXD.
 	DefaultDevLXDEndpoint = "unix:///dev/lxd/sock"
 
 	// DefaultDevLXDTokenFile is the default path to the file containing the bearer token
