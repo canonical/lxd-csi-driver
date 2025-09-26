@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc"
@@ -30,6 +31,10 @@ const (
 	DefaultDriverName     = "lxd.csi.canonical.com"
 	DefaultDriverEndpoint = "unix:///tmp/csi.sock"
 	DefaultDevLXDEndpoint = "unix:///dev/lxd/sock"
+
+	// DefaultDevLXDTokenFile is the default path to the file containing the bearer token
+	// for authenticating with devLXD.
+	DefaultDevLXDTokenFile = "/etc/lxd-csi-driver/token"
 )
 
 const (
@@ -83,22 +88,29 @@ type Driver struct {
 	devLXD         lxdClient.DevLXDServer
 	devLXDEndpoint string
 
+	// Path to the file containing the bearer token for authenticating with devLXD.
+	devLXDTokenFile string
+
 	// LXD cluster member where instance is running on.
 	location    string
 	isClustered bool
 
 	// gRPC server.
 	server *grpc.Server
+
+	// Lock for accessing/modifying driver.
+	lock sync.Mutex
 }
 
 // NewDriver initializes a new CSI driver.
 func NewDriver(opts DriverOptions) *Driver {
 	d := &Driver{
-		name:           opts.Name,
-		version:        driverVersion,
-		endpoint:       opts.Endpoint,
-		devLXDEndpoint: opts.DevLXDEndpoint,
-		nodeID:         opts.NodeID,
+		name:            opts.Name,
+		version:         driverVersion,
+		endpoint:        opts.Endpoint,
+		devLXDEndpoint:  opts.DevLXDEndpoint,
+		devLXDTokenFile: DefaultDevLXDTokenFile,
+		nodeID:          opts.NodeID,
 	}
 
 	d.SetControllerServiceCapabilities(
@@ -107,6 +119,51 @@ func NewDriver(opts DriverOptions) *Driver {
 	)
 
 	return d
+}
+
+// DevLXDClient returns the connected DevLXD client.
+func (d *Driver) DevLXDClient() (lxdClient.DevLXDServer, error) {
+	// Return connected client if it exists.
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	// Return existing client if it exists and the token has not changed.
+	if d.devLXD != nil {
+		return d.devLXD, nil
+	}
+
+	var devLXDClient lxdClient.DevLXDServer
+
+	// Read token from the mounted file.
+	tokenBytes, err := os.ReadFile(d.devLXDTokenFile)
+	if err != nil {
+		return nil, fmt.Errorf("Failed reading DevLXD bearer token from file %q: %v", d.devLXDTokenFile, err)
+	}
+
+	// Connect to DevLXD because DevLXD client is not initialized yet.
+	devLXDClient, err = devlxd.Connect(d.devLXDEndpoint, string(tokenBytes))
+	if err != nil {
+		return nil, fmt.Errorf("Failed to connect to devLXD: %v", err)
+	}
+
+	// Refresh DevLXD server information.
+	info, err := devLXDClient.GetState()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get LXD server info: %v", err)
+	}
+
+	// Fail early if not authenticated.
+	// In addition, this ensures we retrieve actual information whether LXD is clustered or not.
+	// If we are not authenticated, the Environment.ServerClustered field is always false.
+	if info.Auth != api.AuthTrusted {
+		return nil, errors.New("Failed to authenticate with DevLXD server: Client is not trusted")
+	}
+
+	d.devLXD = devLXDClient
+	d.location = info.Location
+	d.isClustered = info.Environment.ServerClustered
+
+	return d.devLXD, nil
 }
 
 // Run starts CSI driver gRPC server.
@@ -118,26 +175,10 @@ func (d *Driver) Run() error {
 	)
 
 	// Connect to devLXD.
-	devLXDClient, err := devlxd.Connect(d.devLXDEndpoint)
+	_, err := d.DevLXDClient()
 	if err != nil {
-		return fmt.Errorf("Failed to connect to devLXD: %v", err)
+		return err
 	}
-
-	info, err := devLXDClient.GetState()
-	if err != nil {
-		return fmt.Errorf("Failed to get LXD server info: %v", err)
-	}
-
-	// Fail early if not authenticated.
-	// In addition, this ensures we retrieve actual information whether LXD is clustered or not.
-	// If we are not authenticated, the Environment.ServerClustered field is always false.
-	if info.Auth != api.AuthTrusted {
-		return errors.New("Failed to authenticate with DevLXD server: Client is not trusted")
-	}
-
-	d.devLXD = devLXDClient
-	d.location = info.Location
-	d.isClustered = info.Environment.ServerClustered
 
 	// Construct gRPC unix address.
 	url, socket, err := utils.ParseUnixSocketURL(d.endpoint)

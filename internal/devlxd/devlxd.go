@@ -12,11 +12,10 @@ import (
 
 const (
 	devLXDUserAgent = "lxd-csi-driver"
-	devLXDTokenFile = "/etc/lxd-csi-driver/token"
 )
 
 // Connect establishes a connection to the devLXD server at the specified endpoint.
-func Connect(endpoint string) (lxdClient.DevLXDServer, error) {
+func Connect(endpoint string, bearerToken string) (lxdClient.DevLXDServer, error) {
 	// Parse and verify devLXD address.
 	_, socket, err := utils.ParseUnixSocketURL(endpoint)
 	if err != nil {
@@ -32,15 +31,10 @@ func Connect(endpoint string) (lxdClient.DevLXDServer, error) {
 		return nil, fmt.Errorf("Invalid devLXD socket path %q: Not a socket", socket)
 	}
 
-	tokenBytes, err := os.ReadFile(devLXDTokenFile)
-	if err != nil {
-		return nil, fmt.Errorf("Failed reading DevLXD bearer token file: %w", err)
-	}
-
 	// Connect to devLXD.
 	connArgs := lxdClient.ConnectionArgs{
 		UserAgent:   devLXDUserAgent,
-		BearerToken: string(tokenBytes),
+		BearerToken: bearerToken,
 	}
 
 	client, err := lxdClient.ConnectDevLXD(socket, &connArgs)
