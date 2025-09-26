@@ -75,7 +75,7 @@ jobs:
 
       - name: Run E2E tests
         env:
-          LXD_STORAGE_POOL: "${{ env.K8S_CLUSTER_NAME }}-storage-pool"
+          TEST_LXD_STORAGE_DRIVERS: "dir,zfs,btrfs,lvm"
         run: |
           set -e
           cd test/e2e
