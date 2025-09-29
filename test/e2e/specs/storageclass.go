@@ -2,7 +2,9 @@ package specs
 
 import (
 	"context"
+	"fmt"
 	"maps"
+	"strings"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -10,6 +12,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/ptr"
 
 	"github.com/canonical/lxd-csi-driver/internal/driver"
 )
@@ -89,11 +92,41 @@ func (sc StorageClass) State(ctx context.Context) (*storagev1.StorageClass, erro
 	return sc.client.StorageV1().StorageClasses().Get(ctx, sc.Name, metav1.GetOptions{})
 }
 
+// StateString returns the state of the StorageClass as a string.
+// This is useful to include in error messages when desired state is not achieved.
+func (sc StorageClass) StateString(ctx context.Context) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "StorageClass %q state:\n", sc.PrettyName())
+
+	state, err := sc.State(ctx)
+	if err != nil {
+		fmt.Fprintln(&b, "- Failed to get state:", err.Error())
+	} else {
+		fmt.Fprintln(&b, "- Provisioner:", state.Provisioner)
+		fmt.Fprintln(&b, "- ReclaimPolicy:", ptr.Deref(state.ReclaimPolicy, ""))
+		fmt.Fprintln(&b, "- VolumeBindingMode:", ptr.Deref(state.VolumeBindingMode, ""))
+
+		if len(state.AllowedTopologies) > 0 {
+			fmt.Fprintf(&b, "- AllowedTopologies: %v\n", state.AllowedTopologies)
+		}
+
+		if len(state.MountOptions) > 0 {
+			fmt.Fprintf(&b, "- MountOptions: %v\n", state.MountOptions)
+		}
+
+		if len(state.Parameters) > 0 {
+			fmt.Fprintf(&b, "- Parameters: %v\n", state.Parameters)
+		}
+	}
+
+	return b.String()
+}
+
 // Create creates the StorageClass in the Kubernetes cluster.
 func (sc StorageClass) Create(ctx context.Context) {
 	ginkgo.By("Create StorageClass " + sc.PrettyName())
 	_, err := sc.client.StorageV1().StorageClasses().Create(ctx, &sc.StorageClass, metav1.CreateOptions{})
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create StorageClass %q", sc.PrettyName())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create StorageClass %q\n%s", sc.PrettyName(), sc.StateString(ctx))
 }
 
 // delete deletes the StorageClass from the Kubernetes cluster.
@@ -109,7 +142,7 @@ func (sc StorageClass) delete(ctx context.Context, opts *metav1.DeleteOptions) e
 func (sc StorageClass) Delete(ctx context.Context) {
 	ginkgo.By("Delete StorageClass " + sc.PrettyName())
 	err := sc.delete(ctx, nil)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to delete StorageClass %q", sc.PrettyName())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to delete StorageClass %q\n%s", sc.PrettyName(), sc.StateString(ctx))
 }
 
 // ForceDelete forcefully deletes the StorageClass from the Kubernetes cluster.

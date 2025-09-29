@@ -91,6 +91,52 @@ func (p Pod) State(ctx context.Context) (*corev1.Pod, error) {
 	return p.client.CoreV1().Pods(p.Namespace).Get(ctx, p.Name, metav1.GetOptions{})
 }
 
+// Events returns the events related to the Pod.
+func (p Pod) Events(ctx context.Context) (*corev1.EventList, error) {
+	return p.client.CoreV1().Events(p.Namespace).List(ctx, metav1.ListOptions{
+		FieldSelector: "involvedObject.kind=Pod,involvedObject.name=" + p.Name,
+	})
+}
+
+// StateString returns the state of the Pod as a string.
+// This is useful to include in error messages when desired state is not achieved.
+func (p Pod) StateString(ctx context.Context) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Pod %q state:\n", p.PrettyName())
+
+	state, err := p.State(ctx)
+	if err != nil {
+		fmt.Fprintln(&b, "- Failed to get state:", err.Error())
+	} else {
+		fmt.Fprintln(&b, "- Phase:", state.Status.Phase)
+		fmt.Fprintln(&b, "- Reason:", state.Status.Reason)
+		fmt.Fprintln(&b, "- Message:", state.Status.Message)
+
+		if len(state.Finalizers) > 0 {
+			fmt.Fprintf(&b, "- Finalizers: %v\n", state.Finalizers)
+		}
+
+		for _, c := range state.Status.Conditions {
+			fmt.Fprintf(&b, "- Condition %s=%s (%s: %s)\n", c.Type, c.Status, c.Reason, c.Message)
+		}
+
+		for _, cs := range state.Status.ContainerStatuses {
+			fmt.Fprintf(&b, "- Container %s: ready=%v state=%+v lastState=%+v\n", cs.Name, cs.Ready, cs.State, cs.LastTerminationState)
+		}
+	}
+
+	events, err := p.Events(ctx)
+	if err != nil {
+		fmt.Fprintln(&b, "- Failed to get events:", err.Error())
+	} else {
+		for _, e := range events.Items {
+			fmt.Fprintf(&b, "- Event %s %s: %s\n", e.Type, e.Reason, e.Message)
+		}
+	}
+
+	return b.String()
+}
+
 // Create creates the Pod in the Kubernetes cluster.
 func (p Pod) Create(ctx context.Context) {
 	ginkgo.By("Create Pod " + p.PrettyName())
@@ -102,7 +148,7 @@ func (p Pod) Create(ctx context.Context) {
 func (p Pod) Update(ctx context.Context) {
 	ginkgo.By("Update Pod " + p.PrettyName())
 	_, err := p.client.CoreV1().Pods(p.Namespace).Update(ctx, &p.Pod, metav1.UpdateOptions{})
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to update Pod %q", p.PrettyName())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to update Pod %q\n%s", p.PrettyName(), p.StateString(ctx))
 }
 
 // delete deletes the Pod from the Kubernetes cluster.
@@ -118,7 +164,7 @@ func (p Pod) delete(ctx context.Context, opts *metav1.DeleteOptions) error {
 func (p Pod) Delete(ctx context.Context) {
 	ginkgo.By("Delete Pod " + p.PrettyName())
 	err := p.delete(ctx, nil)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to delete Pod %q", p.PrettyName())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to delete Pod %q\n%s", p.PrettyName(), p.StateString(ctx))
 }
 
 // ForceDelete forcefully deletes the Pod from the Kubernetes cluster.
@@ -252,7 +298,7 @@ func (p Pod) WaitReady(ctx context.Context, timeout time.Duration) {
 		return false
 	}
 
-	gomega.Eventually(podReady).WithTimeout(timeout).Should(gomega.BeTrue(), "Pod %q is not ready after %s", p.PrettyName(), timeout)
+	gomega.Eventually(podReady).WithTimeout(timeout).Should(gomega.BeTrue(), "Pod %q is not ready after %s\n%s", p.PrettyName(), timeout, p.StateString(ctx))
 }
 
 // WaitRunning waits until the Pod is in the Running state.
@@ -267,7 +313,7 @@ func (p Pod) WaitRunning(ctx context.Context, timeout time.Duration) {
 		return state.Status.Phase
 	}
 
-	gomega.Eventually(podPhase).WithTimeout(timeout).Should(gomega.Equal(corev1.PodRunning), "Pod %q is not running after %s", p.PrettyName(), timeout)
+	gomega.Eventually(podPhase).WithTimeout(timeout).Should(gomega.Equal(corev1.PodRunning), "Pod %q is not running after %s\n%s", p.PrettyName(), timeout, p.StateString(ctx))
 }
 
 // WaitGone waits until the Pod is no longer present in the Kubernetes cluster.
@@ -278,5 +324,5 @@ func (p Pod) WaitGone(ctx context.Context, timeout time.Duration) {
 		return apierrors.IsNotFound(err)
 	}
 
-	gomega.Eventually(podGone).WithTimeout(timeout).Should(gomega.BeTrue(), "Pod %q is not gone after %s", p.PrettyName(), timeout)
+	gomega.Eventually(podGone).WithTimeout(timeout).Should(gomega.BeTrue(), "Pod %q is not gone after %s\n%s", p.PrettyName(), timeout, p.StateString(ctx))
 }

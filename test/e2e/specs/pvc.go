@@ -3,6 +3,8 @@ package specs
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -13,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/ptr"
 )
 
 // PersistentVolumeClaim represents a Kubernetes PersistentVolumeClaim.
@@ -75,9 +78,52 @@ func (pvc PersistentVolumeClaim) WithSize(size string) PersistentVolumeClaim {
 	return pvc
 }
 
+// Events returns the events related to the PersistentVolumeClaim.
+func (pvc PersistentVolumeClaim) Events(ctx context.Context) (*corev1.EventList, error) {
+	return pvc.client.CoreV1().Events(pvc.Namespace).List(ctx, metav1.ListOptions{
+		FieldSelector: "involvedObject.kind=PersistentVolumeClaim,involvedObject.name=" + pvc.Name,
+	})
+}
+
 // State returns the actual state of the PersistentVolumeClaim.
 func (pvc PersistentVolumeClaim) State(ctx context.Context) (*corev1.PersistentVolumeClaim, error) {
 	return pvc.client.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(ctx, pvc.Name, metav1.GetOptions{})
+}
+
+// StateString returns the state of the PersistentVolumeClaim as a string.
+// This is useful to include in error messages when desired state is not achieved.
+func (pvc PersistentVolumeClaim) StateString(ctx context.Context) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "PVC %q state:\n", pvc.PrettyName())
+
+	state, err := pvc.State(ctx)
+	if err != nil {
+		fmt.Fprintln(&b, "- Failed to get state:", err.Error())
+	} else {
+		fmt.Fprintln(&b, "- Phase:", state.Status.Phase)
+		fmt.Fprintln(&b, "- StorageClass:", ptr.Deref(state.Spec.StorageClassName, ""))
+		fmt.Fprintln(&b, "- VolumeName:", state.Spec.VolumeName)
+		fmt.Fprintf(&b, "- AccessModes: %v\n", state.Spec.AccessModes)
+
+		if len(state.Finalizers) > 0 {
+			fmt.Fprintf(&b, "- Finalizers: %v\n", state.Finalizers)
+		}
+
+		for _, c := range state.Status.Conditions {
+			fmt.Fprintf(&b, "- Condition %s=%s (%s: %s)\n", c.Type, c.Status, c.Reason, c.Message)
+		}
+	}
+
+	events, err := pvc.Events(ctx)
+	if err != nil {
+		fmt.Fprintln(&b, "- Failed to get events:", err.Error())
+	} else {
+		for _, e := range events.Items {
+			fmt.Fprintf(&b, "- Event %s %s: %s\n", e.Type, e.Reason, e.Message)
+		}
+	}
+
+	return b.String()
 }
 
 // Create creates the PersistentVolumeClaim in the Kubernetes cluster.
@@ -93,7 +139,7 @@ func (pvc PersistentVolumeClaim) Patch(ctx context.Context) {
 	bytes, err := json.Marshal(pvc.PersistentVolumeClaim)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to marshal PVC %q into JSON", pvc.PrettyName())
 	_, err = pvc.client.CoreV1().PersistentVolumeClaims(pvc.Namespace).Patch(ctx, pvc.Name, types.StrategicMergePatchType, bytes, metav1.PatchOptions{})
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to patch PVC %q", pvc.PrettyName())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to patch PVC %q\n%s", pvc.PrettyName(), pvc.StateString(ctx))
 }
 
 // delete deletes the PersistentVolumeClaim from the Kubernetes cluster.
@@ -109,7 +155,7 @@ func (pvc PersistentVolumeClaim) delete(ctx context.Context, opts *metav1.Delete
 func (pvc PersistentVolumeClaim) Delete(ctx context.Context) {
 	ginkgo.By("Delete PersistentVolumeClaim " + pvc.PrettyName())
 	err := pvc.delete(ctx, nil)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to delete PVC %q", pvc.PrettyName())
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to delete PVC %q\n%s", pvc.PrettyName(), pvc.StateString(ctx))
 }
 
 // ForceDelete forcefully deletes the PersistentVolumeClaim from the Kubernetes cluster.
@@ -135,7 +181,7 @@ func (pvc PersistentVolumeClaim) WaitBound(ctx context.Context, timeout time.Dur
 		return state.Status.Phase
 	}
 
-	gomega.Eventually(pvcPhase).WithTimeout(timeout).Should(gomega.Equal(corev1.ClaimBound), "PVC %q is not bound after %s", pvc.PrettyName(), timeout)
+	gomega.Eventually(pvcPhase).WithTimeout(timeout).Should(gomega.Equal(corev1.ClaimBound), "PVC %q is not bound after %s\n%s", pvc.PrettyName(), timeout, pvc.StateString(ctx))
 }
 
 // WaitSize waits until the PersistentVolumeClaim is resized to desired size.
@@ -155,7 +201,7 @@ func (pvc PersistentVolumeClaim) WaitSize(ctx context.Context, size string, time
 		return v.String()
 	}
 
-	gomega.Eventually(pvcSize).WithTimeout(timeout).Should(gomega.Equal(size), "PVC %q size is not %q after %s", pvc.PrettyName(), size, timeout)
+	gomega.Eventually(pvcSize).WithTimeout(timeout).Should(gomega.Equal(size), "PVC %q size is not %q after %s\n%s", pvc.PrettyName(), size, timeout, pvc.StateString(ctx))
 }
 
 // WaitGone waits until the PVC is no longer present in the Kubernetes cluster.
@@ -166,5 +212,5 @@ func (pvc PersistentVolumeClaim) WaitGone(ctx context.Context, timeout time.Dura
 		return apierrors.IsNotFound(err)
 	}
 
-	gomega.Eventually(podGone).WithTimeout(timeout).Should(gomega.BeTrue(), "PVC %q is not gone after %s", pvc.PrettyName(), timeout)
+	gomega.Eventually(podGone).WithTimeout(timeout).Should(gomega.BeTrue(), "PVC %q is not gone after %s\n%s", pvc.PrettyName(), timeout, pvc.StateString(ctx))
 }
