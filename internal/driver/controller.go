@@ -113,7 +113,7 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	// We need to know which node will consume the volume, as the volume
 	// needs to be created on LXD server where that particular node is running.
 	var target string
-	topologySegments := make(map[string]string)
+	var accessibleTopology []*csi.Topology
 	if !driver.Remote {
 		// If Immediate is set, then the external-provisioner will pass in all
 		// available topologies in the cluster for the driver. For local volumes
@@ -144,7 +144,13 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		//
 		// See: https://kubernetes.io/docs/concepts/storage/storage-classes/#volume-binding-mode
 		if target != "" {
-			topologySegments[AnnotationLXDClusterMember] = target
+			accessibleTopology = []*csi.Topology{
+				{
+					Segments: map[string]string{
+						AnnotationLXDClusterMember: target,
+					},
+				},
+			}
 
 			// Only set the target when LXD is clustered.
 			if c.driver.isClustered {
@@ -198,15 +204,11 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      volumeID,
-			CapacityBytes: sizeBytes,
-			VolumeContext: parameters,
-			ContentSource: contentSource,
-			AccessibleTopology: []*csi.Topology{
-				{
-					Segments: topologySegments,
-				},
-			},
+			VolumeId:           volumeID,
+			CapacityBytes:      sizeBytes,
+			VolumeContext:      parameters,
+			ContentSource:      contentSource,
+			AccessibleTopology: accessibleTopology,
 		},
 	}, nil
 }
