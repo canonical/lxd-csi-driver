@@ -4,6 +4,7 @@ apiVersion: storage.k8s.io/v1
 metadata:
   name: lxd.csi.canonical.com
 spec:
+  fsGroupPolicy: File
   attachRequired: true
   volumeLifecycleModes:
     - Persistent
