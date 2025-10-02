@@ -1,0 +1,37 @@
+suite: CSI Driver
+
+templates:
+  - lxd-csi-driver.yaml
+
+tests:
+  - it: Expect default values when no configuration is applied
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: CSIDriver
+      - equal:
+          path: metadata.name
+          value: lxd.csi.canonical.com
+      - equal:
+          path: spec.attachRequired
+          value: true
+      - equal:
+          path: spec.podInfoOnMount
+          value: false
+      - equal:
+          path: spec.fsGroupPolicy
+          value: File
+      - equal:
+          path: spec.volumeLifecycleModes
+          value:
+            - Persistent
+
+  - it: Expect custom fsGroupPolicy when configured
+    set:
+      driver:
+        fsGroupPolicy: ReadWriteOnceWithFSType
+    asserts:
+      - equal:
+          path: spec.fsGroupPolicy
+          value: ReadWriteOnceWithFSType
