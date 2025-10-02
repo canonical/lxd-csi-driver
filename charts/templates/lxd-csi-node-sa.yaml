@@ -1,0 +1,11 @@
+{{- if .Values.node.serviceAccount.create }}
+---
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: {{ .Values.node.serviceAccount.name | default .Values.node.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lxd-csi-driver.labels" . | nindent 4 }}
+    app.kubernetes.io/component: lxd-csi-node
+{{- end }}
