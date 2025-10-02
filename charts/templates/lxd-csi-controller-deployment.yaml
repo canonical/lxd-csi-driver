@@ -1,0 +1,197 @@
+{{- $name := .Values.controller.name | required "Missing value for controller.name"  }}
+{{- $isReplicated := gt (int .Values.controller.replicas) 1 }}
+{{- $_ := .Values.driver.tokenSecretName | required "Missing value for driver.tokenSecretName" }}
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{ include "lxd-csi-driver.labels" . | nindent 4 }}
+  {{- with .Values.controller.annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      {{- include "lxd-csi-driver.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: lxd-csi-controller
+  strategy:
+    type: {{ .Values.controller.strategy.type }}
+    {{- if eq .Values.controller.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxUnavailable: {{ .Values.controller.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "lxd-csi-driver.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: lxd-csi-controller
+      {{- with .Values.controller.podAnnotations }}
+      annotations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ .Values.controller.serviceAccount.name | default .Values.controller.name }}
+      priorityClassName: {{ .Values.controller.priorityClassName }}
+      {{- with .Values.controller.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if (or .Values.controller.runOnControlPlaneOnly $isReplicated) }}
+      affinity:
+        {{- if and $isReplicated (not (hasKey (.Values.controller.affinity | default (dict)) "podAntiAffinity")) }}
+        {{- /*
+          * Set a pod anti-affinity rule to avoid scheduling multiple replicas on the same node.
+          * We use preferredDuringSchedulingIgnoredDuringExecution to avoid scheduling issues when
+          * there are not enough nodes in the cluster.
+          * Pod anti-affinity configured in values file takes precedence.
+          */}}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: "kubernetes.io/hostname"
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - {{ include "lxd-csi-driver.name" . }}
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - lxd-csi-controller
+        {{- end }}
+        {{- /*
+          * If CSI controller should run only on control plane nodes, configure node affinity rule
+          * to schedule replicas on the control plane nodes.
+          * Node affinity configured in values file takes precedence.
+          */}}
+        {{- if and .Values.controller.runOnControlPlaneOnly (not (hasKey (.Values.controller.affinity | default (dict)) "nodeAffinity")) }}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+        {{- end }}
+        {{- if .Values.controller.affinity }}
+        {{- toYaml .Values.controller.affinity | nindent 8 }}
+        {{- end }}
+      {{- else if .Values.controller.affinity }}
+      affinity:
+        {{- toYaml .Values.controller.affinity | nindent 8 }}
+      {{- end }}
+      {{- if and .Values.controller.runOnControlPlaneOnly (not (hasKey (.Values.controller.affinity | default (dict)) "nodeAffinity")) }}
+      {{- /*
+          * If CSI controller should run only on control plane nodes, configure
+          * tolerations to allow scheduling on control plane nodes.
+          * If node affinity is overridden through configuration in values file,
+          * runOnControlPlaneOnly is ignored and tolerations are not set.
+          */}}
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/controlplane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        {{- with .Values.controller.tolerations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- else if .Values.controller.tolerations }}
+      tolerations:
+        {{- toYaml .Values.controller.tolerations | nindent 8 }}
+      {{- end }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.driver.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 -}}
+      {{- end }}
+      containers:
+        - name: lxd-csi-controller
+          image: {{ printf "%s:%s" .Values.driver.image.repository ( .Values.driver.image.tag | default .Chart.AppVersion ) }}
+          imagePullPolicy: {{ .Values.driver.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - "--node-id=$(NODE_ID)"
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--devlxd-endpoint=$(DEVLXD_ENDPOINT)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: DEVLXD_ENDPOINT
+              value: unix:///dev/lxd/sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: devlxd-socket
+              mountPath: /dev/lxd/sock
+            - name: lxd-csi-secret
+              mountPath: /etc/lxd-csi-driver
+              readOnly: true
+          {{- with .Values.controller.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+        - name: csi-provisioner
+          image: {{ printf "%s:%s" .Values.controller.csiProvisioner.image.repository .Values.controller.csiProvisioner.image.tag }}
+          imagePullPolicy: {{ .Values.controller.csiProvisioner.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - -v=2
+            - --csi-address=$(CSI_ADDRESS)
+            - --feature-gates=Topology=true
+            - --timeout=1200s
+            - --leader-election
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          {{- with .Values.controller.csiProvisioner.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+        - name: csi-attacher
+          image: {{ printf "%s:%s" .Values.controller.csiAttacher.image.repository .Values.controller.csiAttacher.image.tag }}
+          imagePullPolicy: {{ .Values.controller.csiAttacher.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - "-v=2"
+            - "--csi-address=$(CSI_ADDRESS)"
+            - "--timeout=1200s"
+            - --leader-election
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          {{- with .Values.controller.csiAttacher.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: lxd-csi-secret
+          secret:
+            secretName: {{ .Values.driver.tokenSecretName }}
+        - name: devlxd-socket
+          hostPath:
+            path: /dev/lxd/sock
+            type: Socket
+        - name: socket-dir
+          emptyDir: {}
