@@ -13,3 +13,14 @@ image-build: build
 
 image-export: image-build
 	docker save $(REGISTRY)/$(IMAGE):$(VERSION) -o lxd-csi-driver.tar
+
+install-helm:
+	@set -e
+	@command -v helm >/dev/null || { \
+		echo "Installing Helm..."; \
+		curl -fsSL https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash; \
+		helm version; \
+	}
+	@echo "Installing Helm plugin unittest ..."
+	@helm plugin install https://github.com/helm-unittest/helm-unittest > /dev/null || true
+	@echo "Done."
