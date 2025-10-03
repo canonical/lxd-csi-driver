@@ -15,6 +15,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/canonical/lxd-csi-driver/internal/driver"
+	"github.com/canonical/lxd-csi-driver/test/testutils"
 )
 
 // StorageClass represents a Kubernetes StorageClass.
@@ -31,7 +32,7 @@ func NewStorageClass(client *kubernetes.Clientset, namePrefix string, lxdStorage
 
 	manifest := storagev1.StorageClass{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: generateName(namePrefix),
+			Name: testutils.GenerateName(namePrefix),
 		},
 		Parameters: map[string]string{
 			"storagePool": lxdStoragePool,
