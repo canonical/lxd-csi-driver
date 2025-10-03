@@ -1,0 +1,141 @@
+{{- $name := .Values.node.name | required "Missing value for node.name"  }}
+{{- $_ := .Values.driver.tokenSecretName | required "Missing value for driver.tokenSecretName" }}
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{ include "lxd-csi-driver.labels" . | nindent 4 }}
+  {{- with .Values.node.annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "lxd-csi-driver.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: lxd-csi-node
+  updateStrategy:
+    type: {{ .Values.node.strategy.type }}
+    {{- if eq .Values.node.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxUnavailable: {{ .Values.node.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "lxd-csi-driver.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: lxd-csi-node
+      {{- with .Values.node.podAnnotations }}
+      annotations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ .Values.node.serviceAccount.name | default .Values.node.name }}
+      priorityClassName: {{ .Values.node.priorityClassName }}
+      hostNetwork: true
+      {{- with .Values.node.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.node.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.node.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.driver.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 -}}
+      {{- end }}
+      containers:
+        - name: lxd-csi-node
+          image: {{ printf "%s:%s" .Values.driver.image.repository ( .Values.driver.image.tag | default .Chart.AppVersion ) }}
+          imagePullPolicy: {{ .Values.driver.image.pullPolicy }}
+          securityContext:
+            {{- /*
+              * Privileged is required for bidirectional mount propagation.
+              */}}
+            privileged: true
+          args:
+            - "--node-id=$(NODE_NAME)"
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--devlxd-endpoint=$(DEVLXD_ENDPOINT)"
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: DEVLXD_ENDPOINT
+              value: unix:///dev/lxd/sock
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: device-dir
+              mountPath: /dev
+            - name: lxd-mount-dir
+              mountPath: /mnt/lxd-csi
+              mountPropagation: Bidirectional
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet
+              mountPropagation: Bidirectional
+            - name: lxd-csi-secret
+              mountPath: /etc/lxd-csi-driver
+              readOnly: true
+          {{- if .Values.node.resources }}
+          resources: {{ toYaml .Values.node.resources | nindent 12 }}
+          {{- end }}
+        - name: node-driver-registrar
+          image: {{ .Values.node.nodeDriverRegistrar.image.repository }}:{{ .Values.node.nodeDriverRegistrar.image.tag }}
+          imagePullPolicy: {{ .Values.node.nodeDriverRegistrar.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - --v=2
+            - --csi-address=/csi/csi.sock
+            - --kubelet-registration-path=$(DRIVER_REGISTRATION_SOCKET_PATH)
+          env:
+            - name: DRIVER_REGISTRATION_SOCKET_PATH
+              value: /var/lib/kubelet/plugins/lxd.csi.canonical.com/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+          {{- if .Values.node.nodeDriverRegistrar.resources }}
+          resources: {{ toYaml .Values.node.nodeDriverRegistrar.resources | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/lxd.csi.canonical.com
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: lxd-csi-secret
+          secret:
+            secretName: {{ .Values.driver.tokenSecretName }}
+        - name: lxd-mount-dir
+          hostPath:
+            # CSI requests from LXD to mount filesystem volumes in this directory.
+            # When requested, the volume is bind mounted into the pod.
+            path: /mnt/lxd-csi
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+        - name: device-dir
+          hostPath:
+            path: /dev
+            type: Directory

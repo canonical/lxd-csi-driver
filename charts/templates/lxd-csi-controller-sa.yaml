@@ -1,0 +1,11 @@
+{{- if .Values.controller.serviceAccount.create }}
+---
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: {{ .Values.controller.serviceAccount.name | default .Values.controller.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lxd-csi-driver.labels" . | nindent 4 }}
+    app.kubernetes.io/component: lxd-csi-controller
+{{- end }}

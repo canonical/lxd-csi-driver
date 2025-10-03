@@ -1,0 +1,193 @@
+suite: CSI Controller Deployment
+
+templates:
+  - lxd-csi-controller-deployment.yaml
+
+tests:
+  - it: Expect default values when no configuration is applied
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: lxd-csi-controller
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 50%
+      - equal:
+          path: spec.template.spec.priorityClassName
+          value: system-cluster-critical
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: lxd-csi-controller
+      - isNotEmpty:
+          path: spec.template.metadata.labels
+      - isNotEmpty:
+          path: spec.template.spec.affinity
+      - isNotEmpty:
+          path: spec.template.spec.tolerations
+      - notExists:
+          path: metadata.annotations
+      - notExists:
+          path: spec.template.metadata.annotations
+      - notExists:
+          path: spec.template.spec.nodeSelector
+      - notExists:
+          path: spec.template.spec.imagePullSecrets
+      - notExists:
+          path: spec.template.spec.containers[*].resources
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 3
+
+  - it: Expect custom replica count and update strategy when configured
+    set:
+      controller:
+        name: custom-controller
+        runOnControlPlaneOnly: false
+        replicas: 3
+        strategy:
+          type: Recreate
+    asserts:
+      - equal:
+          path: metadata.name
+          value: custom-controller
+      - equal:
+          path: spec.replicas
+          value: 3
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+      - notExists:
+          path: spec.strategy.rollingUpdate
+      - isNotEmpty:
+          path: spec.template.affinity.podAntiAffinity
+
+  - it: Expect node selector when configured
+    set:
+      controller:
+        nodeSelector:
+          kubernetes.io/os: linux
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector
+          value:
+            kubernetes.io/os: linux
+
+  - it: Expect custom annotations when configured
+    set:
+      controller:
+        annotations:
+          key1: value1
+        podAnnotations:
+          key2: value2
+    asserts:
+      - equal:
+          path: metadata.annotations
+          value:
+            key1: value1
+      - equal:
+          path: spec.template.metadata.annotations
+          value:
+            key2: value2
+
+  - it: Expect no affinity or tolerations when running 1 replica and runOnControlPlaneOnly is disabled
+    set:
+      controller:
+        replicas: 1
+        runOnControlPlaneOnly: false
+        affinity: {}
+        tolerations: []
+    asserts:
+      - notExists:
+          path: spec.template.spec.affinity.nodeAffinity
+      - notExists:
+          path: spec.template.spec.tolerations
+
+  - it: Expect affinity and tolerations configured when runOnControlPlaneOnly is enabled
+    set:
+      controller:
+        runOnControlPlaneOnly: true
+        affinity: {}
+        tolerations: []
+    asserts:
+      - isNotEmpty:
+          path: spec.template.spec.affinity.nodeAffinity
+      - isNotEmpty:
+          path: spec.template.spec.tolerations
+
+  - it: Expect resource requests and limits when configured
+    set:
+      controller:
+        resources:
+          limits:
+            cpu: 200m
+            memory: 512Mi
+          requests:
+            cpu: 20m
+            memory: 128Mi
+        csiProvisioner:
+          resources:
+            limits:
+              cpu: 100m
+        csiAttacher:
+          resources:
+            requests:
+              memory: 64Mi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="lxd-csi-controller")].resources
+          value:
+            limits:
+              cpu: 200m
+              memory: 512Mi
+            requests:
+              cpu: 20m
+              memory: 128Mi
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="csi-provisioner")].resources
+          value:
+            limits:
+              cpu: 100m
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="csi-attacher")].resources
+          value:
+            requests:
+              memory: 64Mi
+
+  - it: Expect custom image when configured
+    set:
+      driver:
+        image:
+          repository: registry/image-repo
+          tag: v1.2.3
+          pullPolicy: Always
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="lxd-csi-controller")].image
+          value: registry/image-repo:v1.2.3
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="lxd-csi-controller")].imagePullPolicy
+          value: Always
+
+  - it: Expect image version to match Chart's AppVersion when not set
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="lxd-csi-controller")].image
+          value: ghcr.io/canonical/lxd-csi-driver:latest-edge
+
+  - it: Expect namespace when Chart's release namespace is configured
+    release:
+      namespace: test-namespace
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: test-namespace

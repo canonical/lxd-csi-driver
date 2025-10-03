@@ -1,0 +1,5 @@
+# Helm Chart for LXD CSI Driver
+
+LXD CSI source: https://github.com/canonical/lxd-csi-driver
+Chart source: https://github.com/canonical/lxd-csi-driver/charts
+

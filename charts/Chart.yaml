@@ -1,0 +1,11 @@
+apiVersion: v2
+name: lxd-csi-driver
+type: application
+description: A Helm chart for LXD CSI driver
+home: https://github.com/canonical/lxd-csi-driver
+
+# The LXD CSI Driver publishes Helm charts with a matching version of the driver itself.
+# Only exception is latest-edge, where the chart version is always "v0.0.0-latest-edge"
+# to satisfy semver constraint.
+version: "v0.0.0-latest-edge"
+appVersion: "latest-edge"

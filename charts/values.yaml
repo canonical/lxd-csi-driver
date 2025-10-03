@@ -1,0 +1,243 @@
+# -- General CSI Driver configuration.
+driver:
+  # -- (object) LXD CSI controller image to use.
+  # Tag defaults to Chart's version.
+  image:
+    repository: ghcr.io/canonical/lxd-csi-driver
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  # -- (list) Image pull secrets for the CSI controller containers.
+  imagePullSecrets: []
+    # - name: myRegistryKeySecret
+
+  # -- (string) Name of the Kubernetes secret that contains the DevLXD bearer token
+  # for authenticating with LXD. The token must be set in the Secret under field "token".
+  tokenSecretName: lxd-csi-secret
+
+  # -- (string) fsGroupPolicy defines whether kubelet adjusts volume
+  # ownership and permissions to match the Pod’s security context
+  # before the volume is made available in the container.
+  #
+  # Possible values:
+  # - None:
+  #   Volumes are presented as-is, and kubelet will not attempt to
+  #   change file ownership.
+  #
+  # - ReadWriteOnceWithFSType:
+  #   The kubelet will attempt to apply fsGroup changes when volume's
+  #   access mode is ReadWriteOnce and filesystem type is set.
+  #
+  # - File (default):
+  #   The kubelet will attempt to apply fsGroup changes regardless of
+  #   the volume's access mode or filesystem type.
+  fsGroupPolicy: File
+
+# -- Whether to create and use RBAC resources.
+rbac:
+  create: true
+
+# -- CSI Controller Plugin (Deployment) specific configuration.
+controller:
+  # -- (string) Name of the CSI controller deployment.
+  name: lxd-csi-controller
+
+  # -- (string) Number of replicas for the CSI controller plugin deployment.
+  replicas: 1
+
+  # -- Strategy to use when updating controller pods.
+  strategy:
+    # -- (string) Strategy type defines how old pods should be replaced during an update.
+    #
+    # Possible values:
+    # - RollingUpdate: Gradually replaces old pods with new ones.
+    # - Recreate:      Deletes all old pods before creating new ones.
+    type: RollingUpdate
+    # -- (object) Rolling update configuration parameters.
+    rollingUpdate:
+      # -- (string) The maximum number of pods that can be unavailable during an update.
+      maxUnavailable: 50%
+
+  # -- (string) Allows setting custom priorityClassName for CSI controller plugin pods.
+  # By default, system-cluster-critical is used which is the highest priority after
+  # system-node-critical.
+  priorityClassName: system-cluster-critical
+
+  serviceAccount:
+    # -- (bool) Whether to create a service account for the CSI controller plugin.
+    create: true
+    # -- (string) Name of the service account to use for the CSI controller plugin.
+    # Defaults to [controller.name] if empty and create is set to true.
+    name: ""
+
+  # -- (bool) Whether to run the CSI controller plugin on control plane nodes only.
+  # Enabling this will add node affinity and tolerations to the controller plugin.
+  # Setting custom [controller.affinity.nodeAffinity] disables this option.
+  runOnControlPlaneOnly: true
+
+  # -- (object) Node selector for the CSI controller plugin pods.
+  nodeSelector: {}
+    # kubernetes.io/os: linux
+
+  # -- (list) Tolerations for the CSI controller plugin pods.
+  tolerations: []
+    # - key: "node-role.kubernetes.io/worker"
+    #   operator: "Exists"
+    #   effect: "NoSchedule"
+
+  # -- (object) Affinity for the CSI controller plugin pods.
+  affinity: {}
+
+  # -- (object) Additional annotations for the CSI controller plugin deployment.
+  annotations: {}
+
+  # -- (object) Additional annotations for the CSI controller plugin pods.
+  podAnnotations: {}
+
+  # -- (object) CSI driver controller.
+  resources: {}
+    # limits:
+    #   cpu: 100m
+    #   memory: 256Mi
+    # requests:
+    #   cpu: 10m
+    #   memory: 64Mi
+
+  # -- CSI Provisioner sidecar container configuration.
+  csiProvisioner:
+    image:
+      repository: registry.k8s.io/sig-storage/csi-provisioner
+      tag: v5.0.2
+      imagePullPolicy: IfNotPresent
+    resources: {}
+      # limits:
+      #   cpu: 100m
+      #   memory: 256Mi
+      # requests:
+      #   cpu: 10m
+      #   memory: 64Mi
+
+  # -- CSI Attacher sidecar container configuration.
+  csiAttacher:
+    image:
+      repository: registry.k8s.io/sig-storage/csi-attacher
+      tag: v4.8.0
+      pullPolicy: IfNotPresent
+    resources: {}
+      # limits:
+      #   cpu: 100m
+      #   memory: 256Mi
+      # requests:
+      #   cpu: 10m
+      #   memory: 64Mi
+
+# -- CSI Node Plugin (DaemonSet) specific configuration.
+node:
+  # -- (string) Name of the CSI node daemon set.
+  name: lxd-csi-node
+
+  # -- Strategy to use when updating node pods.
+  strategy:
+    # -- (string) Strategy type defines how old pods should be replaced during an update.
+    #
+    # Possible values:
+    # - RollingUpdate: (Default) Gradually replaces old pods with new ones.
+    # - OnDelete:      Requires manual deletion of old pods to trigger update.
+    type: RollingUpdate
+    # -- (object) Rolling update configuration parameters.
+    rollingUpdate:
+      # -- (string) The maximum number of pods that can be unavailable during an update.
+      maxUnavailable: 1
+
+  # -- (string) Allows setting custom priorityClassName for CSI node plugin pods.
+  # By default, system-node-critical is used which is the highest priority.
+  priorityClassName: system-node-critical
+
+  serviceAccount:
+    # -- (bool) Whether to create a service account for the CSI node plugin.
+    create: true
+    # -- (string) Name of the service account to use for the CSI node plugin.
+    # Defaults to [node.name] if empty and create is set to true
+    name: ""
+
+  # -- (object) Node selector for the CSI node plugin pods.
+  nodeSelector: {}
+    # kubernetes.io/os: linux
+
+  # -- (list) Tolerations for the CSI node plugin pods.
+  tolerations: []
+    # - key: "node-role.kubernetes.io/worker"
+    #   operator: "Exists"
+    #   effect: "NoSchedule"
+
+  # -- (object) Affinity for the CSI node plugin pods.
+  affinity: {}
+  # nodeAffinity:
+  #   requiredDuringSchedulingIgnoredDuringExecution:
+  #     nodeSelectorTerms:
+  #     - matchExpressions:
+  #       - key: kubernetes.io/os
+  #         operator: In
+  #         values:
+  #         - linux
+
+  # -- (object) Additional annotations for the CSI node plugin deployment.
+  annotations: {}
+  # app: lxd-csi-node
+
+  # -- (object) Additional annotations for the CSI node plugin pods.
+  podAnnotations: {}
+
+  # -- (object) Node plugin resource limits and requests.
+  resources: {}
+    # limits:
+    #   cpu: 100m
+    #   memory: 256Mi
+    # requests:
+    #   cpu: 10m
+    #   memory: 64Mi
+
+  # -- CSI Node Driver Registrar sidecar container configuration.
+  nodeDriverRegistrar:
+    image:
+      repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
+      tag: v2.13.0
+      pullPolicy: IfNotPresent
+    resources: {}
+      # limits:
+      #   cpu: 100m
+      #   memory: 256Mi
+      # requests:
+      #   cpu: 10m
+      #   memory: 64Mi
+
+# -- List of storage classes to create.
+storageClasses:
+  - # -- (bool) Whether the storage class should be created.
+    # Default value is true.
+    create: false
+
+    # -- (string) Storage class name.
+    # Example: lxd-csi-fs
+    name: ""
+
+    # -- (string) Existing LXD storage pool to use.
+    # Example: my-storage-pool
+    storagePool: ""
+
+    # -- (string) Volume binding mode.
+    # Possible values are "Immediate" and "WaitForFirstConsumer" (default).
+    #
+    # Note that using Immediate binding mode may lead to volumes being created
+    # on a different node than where the pod is scheduled. This may not be
+    # desirable if using local storage pools.
+    volumeBindingMode: WaitForFirstConsumer
+
+    # -- (string) Reclaim policy for the volume.
+    # Possible values are "Retain" and "Delete" (default).
+    reclaimPolicy: Delete
+
+    # -- (object) Storage class annotations.
+    annotations: {}
+      # -- Set this annotation to make this the default storage class.
+      # storageclass.kubernetes.io/is-default-class: "true"
