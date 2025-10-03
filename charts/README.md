@@ -22,7 +22,7 @@ stringData:
 Install the chart:
 ```sh
 helm install lxd-csi-driver oci://ghcr.io/canonical/charts/lxd-csi-driver \
-  --version 0.0.0 \
+  --version v0.0.0-latest-edge \
   --namespace lxd-csi \
   --create-namespace \
   -f values.yaml
@@ -30,7 +30,7 @@ helm install lxd-csi-driver oci://ghcr.io/canonical/charts/lxd-csi-driver \
 
 Optionally, you can retrieve default chart [values](/values.yaml) and edit them:
 ```sh
-helm show values oci://ghcr.io/canonical/charts/lxd-csi-driver --version 0.0.0 > values.yaml
+helm show values oci://ghcr.io/canonical/charts/lxd-csi-driver --version v0.0.0-latest-edge > values.yaml
 ```
 
 > [!TIP]
