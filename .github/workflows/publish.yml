@@ -76,4 +76,4 @@ jobs:
           set -e
           chartVersion="v0.0.0-latest-edge"
           helm package charts --version "${chartVersion}" --app-version "latest-edge"
-          helm push "lxd-csi-driver-${chartVersion}.tgz" "oci://${{ env.CONTAINER_REGISTRY }}/${{ github.repository_owner }}/charts:${chartVersion}"
+          helm push "lxd-csi-driver-${chartVersion}.tgz" "oci://${{ env.CONTAINER_REGISTRY }}/${{ github.repository_owner }}/charts"
