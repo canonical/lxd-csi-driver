@@ -10,7 +10,7 @@ By default, the chart expects the Secret to be named `lxd-csi-secret`, but this 
 apiVersion: v1
 kind: Secret
 metadata:
-  name: lxd-csi-token
+  name: lxd-csi-secret
   namespace: lxd-csi # Secret must be in the same namespace as LXD CSI driver.
 type: Opaque
 stringData:
