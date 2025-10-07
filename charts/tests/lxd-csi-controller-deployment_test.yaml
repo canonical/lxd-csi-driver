@@ -163,6 +163,15 @@ tests:
             requests:
               memory: 64Mi
 
+  - it: Expect custom volume name prefix arg when configured
+    set:
+      driver:
+        volumeNamePrefix: prod-lxd-csi
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="lxd-csi-controller")].args
+          content: "--volume-name-prefix=prod-lxd-csi"
+
   - it: Expect custom image when configured
     set:
       driver:
