@@ -117,7 +117,7 @@ spec:
               mountPath: /csi
             - name: devlxd-socket
               mountPath: /dev/lxd/sock
-            - name: lxd-csi-token
+            - name: lxd-csi-secret
               mountPath: /etc/lxd-csi-driver
               readOnly: true
           resources:
@@ -131,9 +131,9 @@ spec:
               drop:
                 - ALL
       volumes:
-        - name: lxd-csi-token
+        - name: lxd-csi-secret
           secret:
-            secretName: lxd-csi-token
+            secretName: lxd-csi-secret
         - name: devlxd-socket
           hostPath:
             path: /dev/lxd/sock
