@@ -79,6 +79,9 @@ type DriverOptions struct {
 	// DevLXD endpoint (unix).
 	DevLXDEndpoint string
 
+	// Prefix used for LXD volume names.
+	VolumeNamePrefix string
+
 	// ID of the node where the driver is running.
 	NodeID string
 }
@@ -109,6 +112,9 @@ type Driver struct {
 	location    string
 	isClustered bool
 
+	// Prefix used for LXD volume names.
+	volumeNamePrefix string
+
 	// gRPC server.
 	server *grpc.Server
 
@@ -119,12 +125,13 @@ type Driver struct {
 // NewDriver initializes a new CSI driver.
 func NewDriver(opts DriverOptions) *Driver {
 	d := &Driver{
-		name:            opts.Name,
-		version:         driverVersion,
-		endpoint:        opts.Endpoint,
-		devLXDEndpoint:  opts.DevLXDEndpoint,
-		devLXDTokenFile: DefaultDevLXDTokenFile,
-		nodeID:          opts.NodeID,
+		name:             opts.Name,
+		version:          driverVersion,
+		endpoint:         opts.Endpoint,
+		devLXDEndpoint:   opts.DevLXDEndpoint,
+		devLXDTokenFile:  DefaultDevLXDTokenFile,
+		volumeNamePrefix: opts.VolumeNamePrefix,
+		nodeID:           opts.NodeID,
 	}
 
 	d.SetControllerServiceCapabilities(
