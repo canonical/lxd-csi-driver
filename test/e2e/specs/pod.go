@@ -161,10 +161,12 @@ func (p Pod) delete(ctx context.Context, opts *metav1.DeleteOptions) error {
 }
 
 // Delete deletes the Pod from the Kubernetes cluster.
+// It also waits until the Pod is fully removed.
 func (p Pod) Delete(ctx context.Context) {
 	ginkgo.By("Delete Pod " + p.PrettyName())
 	err := p.delete(ctx, nil)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to delete Pod %q\n%s", p.PrettyName(), p.StateString(ctx))
+	p.WaitGone(ctx, 60*time.Second)
 }
 
 // ForceDelete forcefully deletes the Pod from the Kubernetes cluster.
