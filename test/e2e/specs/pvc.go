@@ -22,6 +22,10 @@ import (
 type PersistentVolumeClaim struct {
 	corev1.PersistentVolumeClaim
 	client *kubernetes.Clientset
+
+	// volumeName is the name of the underlying volume in LXD.
+	// It is set once the PVC is created.
+	volumeName string
 }
 
 // NewPersistentVolumeClaim creates a new PersistentVolumeClaim with the given name and
@@ -44,7 +48,10 @@ func NewPersistentVolumeClaim(client *kubernetes.Clientset, name string, namespa
 		},
 	}
 
-	return PersistentVolumeClaim{manifest, client}
+	return PersistentVolumeClaim{
+		PersistentVolumeClaim: manifest,
+		client:                client,
+	}
 }
 
 // PrettyName returns the string consisting of PersistentVolumeClaim's name and namespace.
@@ -134,7 +141,7 @@ func (pvc PersistentVolumeClaim) Create(ctx context.Context) {
 }
 
 // Patch updates the PersistentVolumeClaim in the Kubernetes cluster.
-func (pvc PersistentVolumeClaim) Patch(ctx context.Context) {
+func (pvc *PersistentVolumeClaim) Patch(ctx context.Context) {
 	ginkgo.By("Update PersistentVolumeClaim " + pvc.PrettyName())
 	bytes, err := json.Marshal(pvc.PersistentVolumeClaim)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to marshal PVC %q into JSON", pvc.PrettyName())
@@ -143,7 +150,7 @@ func (pvc PersistentVolumeClaim) Patch(ctx context.Context) {
 }
 
 // delete deletes the PersistentVolumeClaim from the Kubernetes cluster.
-func (pvc PersistentVolumeClaim) delete(ctx context.Context, opts *metav1.DeleteOptions) error {
+func (pvc *PersistentVolumeClaim) delete(ctx context.Context, opts *metav1.DeleteOptions) error {
 	if opts == nil {
 		opts = &metav1.DeleteOptions{}
 	}
@@ -152,10 +159,19 @@ func (pvc PersistentVolumeClaim) delete(ctx context.Context, opts *metav1.Delete
 }
 
 // Delete deletes the PersistentVolumeClaim from the Kubernetes cluster.
-func (pvc PersistentVolumeClaim) Delete(ctx context.Context) {
+// It also waits until the PVC and the corresponding PV are fully removed.
+func (pvc *PersistentVolumeClaim) Delete(ctx context.Context) {
 	ginkgo.By("Delete PersistentVolumeClaim " + pvc.PrettyName())
-	err := pvc.delete(ctx, nil)
+
+	// Record the bound PV name before deleting the PVC.
+	// Lets us wait for PVC and PV deletion without later listing PVs or matching ownership.
+	state, err := pvc.State(ctx)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get state of PVC %q before deletion", pvc.PrettyName())
+	pvc.volumeName = state.Spec.VolumeName
+
+	err = pvc.delete(ctx, nil)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to delete PVC %q\n%s", pvc.PrettyName(), pvc.StateString(ctx))
+	pvc.WaitGone(ctx, 30*time.Second)
 }
 
 // ForceDelete forcefully deletes the PersistentVolumeClaim from the Kubernetes cluster.
@@ -207,10 +223,23 @@ func (pvc PersistentVolumeClaim) WaitSize(ctx context.Context, size string, time
 // WaitGone waits until the PVC is no longer present in the Kubernetes cluster.
 func (pvc PersistentVolumeClaim) WaitGone(ctx context.Context, timeout time.Duration) {
 	ginkgo.By("Wait for PersistentVolumeClaim " + pvc.PrettyName() + " to be gone")
-	podGone := func() bool {
+	pvcGone := func() bool {
 		_, err := pvc.State(ctx)
 		return apierrors.IsNotFound(err)
 	}
 
-	gomega.Eventually(podGone).WithTimeout(timeout).Should(gomega.BeTrue(), "PVC %q is not gone after %s\n%s", pvc.PrettyName(), timeout, pvc.StateString(ctx))
+	gomega.Eventually(pvcGone).WithTimeout(timeout).Should(gomega.BeTrue(), "PVC %q is not gone after %s\n%s", pvc.PrettyName(), timeout, pvc.StateString(ctx))
+
+	// Wait for the underlying PV to be removed as well if the volumeName
+	// was stored before the PVC was removed.
+	if pvc.volumeName != "" {
+		ginkgo.By("Wait for PersistentVolume " + pvc.volumeName + " to be gone")
+
+		pvGone := func() bool {
+			_, err := pvc.client.CoreV1().PersistentVolumes().Get(ctx, pvc.volumeName, metav1.GetOptions{})
+			return apierrors.IsNotFound(err)
+		}
+
+		gomega.Eventually(pvGone).WithTimeout(timeout).Should(gomega.BeTrue(), "PV %q is not gone after %s", pvc.volumeName, timeout)
+	}
 }
