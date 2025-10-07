@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -90,7 +91,20 @@ func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create storage pool %q with driver %q: %v", req.Name, req.Driver, err)
 
 	cleanup = func() {
-		_ = client.DeleteStoragePool(req.Name)
+		err := client.DeleteStoragePool(req.Name)
+		if err != nil {
+			fmt.Printf("===> FAILED DELETING STORAGE POOL %q: %v\n", req.Name, err)
+			vols, err := client.GetStoragePoolVolumes(req.Name)
+			if err != nil {
+				fmt.Printf("===> FAILED GETTING VOLUMES FOR STORAGE POOL %q: %v\n", req.Name, err)
+			} else if len(vols) != 0 {
+				fmt.Printf("===> THERE ARE STORAGE VOLUMES LEFT IN STORAGE POOL %q:\n", req.Name)
+				for _, vol := range vols {
+					fmt.Printf("     - %q (type: %q)\n", vol.Name, vol.Type)
+				}
+			}
+		}
+
 		client.Disconnect()
 	}
 
