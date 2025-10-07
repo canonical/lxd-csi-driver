@@ -9,10 +9,11 @@ import (
 )
 
 var (
-	driverName     = flag.String("driver-name", driver.DefaultDriverName, "Name of the CSI driver")
-	endpoint       = flag.String("endpoint", driver.DefaultDriverEndpoint, "CSI endpoint (unix socket path)")
-	devLXDEndpoint = flag.String("devlxd-endpoint", driver.DefaultDevLXDEndpoint, "Devlxd endpoint (devlxd unix socket path)")
-	nodeID         = flag.String("node-id", "", "Kubernetes node ID")
+	driverName       = flag.String("driver-name", driver.DefaultDriverName, "Name of the CSI driver")
+	endpoint         = flag.String("endpoint", driver.DefaultDriverEndpoint, "CSI endpoint (unix socket path)")
+	devLXDEndpoint   = flag.String("devlxd-endpoint", driver.DefaultDevLXDEndpoint, "Devlxd endpoint (devlxd unix socket path)")
+	volumeNamePrefix = flag.String("volume-name-prefix", driver.DefaultVolumeNamePrefix, "Prefix used for LXD volume names")
+	nodeID           = flag.String("node-id", "", "Kubernetes node ID")
 )
 
 func run() error {
@@ -20,10 +21,11 @@ func run() error {
 	flag.Parse()
 
 	opts := driver.DriverOptions{
-		Name:           *driverName,
-		Endpoint:       *endpoint,
-		DevLXDEndpoint: *devLXDEndpoint,
-		NodeID:         *nodeID,
+		Name:             *driverName,
+		Endpoint:         *endpoint,
+		DevLXDEndpoint:   *devLXDEndpoint,
+		VolumeNamePrefix: *volumeNamePrefix,
+		NodeID:           *nodeID,
 	}
 
 	return driver.NewDriver(opts).Run()
