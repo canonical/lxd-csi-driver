@@ -65,9 +65,9 @@ Create a namespace `lxd-csi`:
 kubectl create namespace lxd-csi --save-config
 ```
 
-Create a Kubernetes secret `lxd-csi-token` containing a previously created bearer token:
+Create a Kubernetes secret `lxd-csi-secret` containing a previously created bearer token:
 ```sh
-kubectl create secret generic lxd-csi-token \
+kubectl create secret generic lxd-csi-secret \
     --namespace lxd-csi \
     --from-literal=token="${token}"
 ```
