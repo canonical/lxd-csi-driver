@@ -74,7 +74,7 @@ var _ = ginkgo.Describe("[Volume binding mode] ", func() {
 		// Create FS PVC.
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).WithStorageClassName(sc.Name)
 		pvc.Create(ctx)
-		defer pvc.ForceDelete(ctx)
+		defer pvc.Delete(ctx)
 
 		// Ensure the pod is running and both PVCs are bound.
 		pvc.WaitBound(ctx, 30*time.Second)
@@ -82,7 +82,7 @@ var _ = ginkgo.Describe("[Volume binding mode] ", func() {
 		// Create a pod that uses the PVC.
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 		pod.Create(ctx)
-		defer pod.ForceDelete(ctx)
+		defer pod.Delete(ctx)
 
 		// Ensure the pod is running.
 		pod.WaitReady(ctx, 60*time.Second)
@@ -98,7 +98,7 @@ var _ = ginkgo.Describe("[Volume binding mode] ", func() {
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
 			WithStorageClassName(sc.Name)
 		pvc.Create(ctx)
-		defer pvc.ForceDelete(ctx)
+		defer pvc.Delete(ctx)
 
 		// Ensure the PVC is pending state and is not bound yet.
 		state, err := pvc.State(ctx)
@@ -108,7 +108,7 @@ var _ = ginkgo.Describe("[Volume binding mode] ", func() {
 		// Create a pod that uses the PVC.
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 		pod.Create(ctx)
-		defer pod.ForceDelete(ctx)
+		defer pod.Delete(ctx)
 
 		// Ensure the pod is running and the PVC is bound.
 		pod.WaitReady(ctx, 60*time.Second)
@@ -139,7 +139,7 @@ var _ = ginkgo.Describe("[Volume binding mode] ", func() {
 			WithPVC(pvcFS, "/mnt/test").
 			WithPVC(pvcBlock, "/dev/vda42")
 		pod.Create(ctx)
-		defer pod.ForceDelete(ctx)
+		defer pod.Delete(ctx)
 
 		// Ensure the pod is running and both PVCs are bound.
 		pod.WaitReady(ctx, 60*time.Second)
@@ -168,12 +168,12 @@ var _ = ginkgo.Describe("[Volume read/write]", func() {
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
 			WithStorageClassName(sc.Name)
 		pvc.Create(ctx)
-		defer pvc.ForceDelete(ctx)
+		defer pvc.Delete(ctx)
 
 		// Create a pod that uses the PVC.
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 		pod.Create(ctx)
-		defer pod.ForceDelete(ctx)
+		defer pod.Delete(ctx)
 		pod.WaitReady(ctx, 60*time.Second)
 
 		// Write to the volume.
@@ -198,13 +198,13 @@ var _ = ginkgo.Describe("[Volume read/write]", func() {
 			WithStorageClassName(sc.Name).
 			WithVolumeMode(corev1.PersistentVolumeBlock)
 		pvc.Create(ctx)
-		defer pvc.ForceDelete(ctx)
+		defer pvc.Delete(ctx)
 
 		// Create a pod that uses the PVC.
 		dev := "/dev/vda42"
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, dev)
 		pod.Create(ctx)
-		defer pod.ForceDelete(ctx)
+		defer pod.Delete(ctx)
 		pod.WaitReady(ctx, 30*time.Second)
 
 		// Write to the volume.
@@ -239,12 +239,12 @@ var _ = ginkgo.Describe("[Volume release]", func() {
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
 			WithStorageClassName(sc.Name)
 		pvc.Create(ctx)
-		defer pvc.ForceDelete(ctx)
+		defer pvc.Delete(ctx)
 
 		// Create a pod.
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 		pod.Create(ctx)
-		defer pod.ForceDelete(ctx)
+		defer pod.Delete(ctx)
 		pod.WaitReady(ctx, 60*time.Second)
 
 		// Write to the volume.
@@ -260,7 +260,6 @@ var _ = ginkgo.Describe("[Volume release]", func() {
 
 		// Recreate the pod.
 		pod.Delete(ctx)
-		pod.WaitGone(ctx, 60*time.Second)
 		pod.Create(ctx)
 		pod.WaitReady(ctx, 30*time.Second)
 		pvc.WaitBound(ctx, 30*time.Second)
@@ -280,12 +279,12 @@ var _ = ginkgo.Describe("[Volume release]", func() {
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
 			WithStorageClassName(sc.Name)
 		pvc.Create(ctx)
-		defer pvc.ForceDelete(ctx)
+		defer pvc.Delete(ctx)
 
 		// Create a pod.
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 		pod.Create(ctx)
-		defer pod.ForceDelete(ctx)
+		defer pod.Delete(ctx)
 		pod.WaitReady(ctx, 60*time.Second)
 
 		// Write to the volume.
@@ -301,9 +300,8 @@ var _ = ginkgo.Describe("[Volume release]", func() {
 
 		// Recreate the pod and PVC.
 		pod.Delete(ctx)
-		pod.WaitGone(ctx, 60*time.Second)
 		pvc.Delete(ctx)
-		pvc.WaitGone(ctx, 30*time.Second)
+
 		pvc.Create(ctx)
 		pod.Create(ctx)
 		pod.WaitReady(ctx, 60*time.Second)
