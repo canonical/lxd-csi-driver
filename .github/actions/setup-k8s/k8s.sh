@@ -409,7 +409,7 @@ installLXDCSIDriver() {
 
     echo "===> Installing LXD CSI driver ..."
     kubectl --kubeconfig "${kubeconfigPath}" create namespace lxd-csi --save-config
-    kubectl --kubeconfig "${kubeconfigPath}" create secret generic lxd-csi-token --namespace lxd-csi --from-literal=token="${token}"
+    kubectl --kubeconfig "${kubeconfigPath}" create secret generic lxd-csi-secret --namespace lxd-csi --from-literal=token="${token}"
     kubectl --kubeconfig "${kubeconfigPath}" apply -f "${csiDeployPath}"
 }
 
