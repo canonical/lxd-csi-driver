@@ -61,6 +61,9 @@ spec:
             - "--node-id=$(NODE_NAME)"
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--devlxd-endpoint=$(DEVLXD_ENDPOINT)"
+            {{- if .Values.driver.volumeNamePrefix }}
+            - "--volume-name-prefix={{ .Values.driver.volumeNamePrefix }}"
+            {{- end }}
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
