@@ -36,6 +36,10 @@ const (
 	// DefaultDriverEndpoint is the default unix socket path for the CSI driver.
 	DefaultDriverEndpoint = "unix:///tmp/csi.sock"
 
+	// DefaultVolumeNamePrefix is the default prefix used for LXD volume names.
+	// Volume names are in format "<prefix>-<uuid>".
+	DefaultVolumeNamePrefix = "lxd-csi"
+
 	// DefaultDevLXDEndpoint is the default unix socket path for connecting to DevLXD.
 	DefaultDevLXDEndpoint = "unix:///dev/lxd/sock"
 
