@@ -62,6 +62,18 @@ const (
 	//
 	// This is internal parameter used only by the CSI driver.
 	ParameterStorageDriver = "internal.storageDriver"
+
+	// ParameterPVCName contains the name of the PVC that triggered volume creation.
+	// It is passed to the controller by the CSI provisioner.
+	ParameterPVCName = "csi.storage.k8s.io/pvc/name"
+
+	// ParameterPVCNamespace contains the namespace of the PVC that triggered volume creation.
+	// It is passed to the controller by the CSI provisioner.
+	ParameterPVCNamespace = "csi.storage.k8s.io/pvc/namespace"
+
+	// ParameterPVName contains the name of the PV that represents the LXD volume.
+	// It is passed to the controller by the CSI provisioner.
+	ParameterPVName = "csi.storage.k8s.io/pv/name"
 )
 
 // DriverOptions contains the configurable options for the driver.
