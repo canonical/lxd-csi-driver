@@ -283,12 +283,6 @@ func (d *Driver) SetNodeServiceCapabilities(caps ...csi.NodeServiceCapability_RP
 	d.nodeCapabilities = capabilities
 }
 
-// VolumeDescription returns the generic description for the volume
-// that is managed by the CSI driver.
-func (d *Driver) VolumeDescription() string {
-	return "Managed by " + d.name
-}
-
 // getVolumeID constructs a unique volume ID based on the cluster member,
 // storage pool name, and volume name.
 // Returned value is in format "[<clusterMember>:]<poolName>/<volumeName>".
