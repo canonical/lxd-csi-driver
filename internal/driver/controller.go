@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -72,6 +73,11 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 	}
 
 	for k, v := range parameters {
+		if strings.HasPrefix(k, "csi.storage.k8s.io/") {
+			// Skip standard CSI parameters.
+			continue
+		}
+
 		switch k {
 		case ParameterStoragePool:
 			parameters[k] = v
@@ -181,13 +187,28 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		return nil, status.Error(codes.Unimplemented, "CreateVolume: Volume source is not supported yet")
 	}
 
+	// If PVC name was passed to the driver, use it as the volume description.
+	// Otherwise, use a generic description to clearly indicate the volume is managed by Kubernetes.
+	volumeDescription := "Managed by Kubernetes PVC"
+	pvcName := parameters[ParameterPVCName]
+	if pvcName != "" {
+		pvcIdentifier := pvcName
+
+		pvcNamespace := parameters[ParameterPVCNamespace]
+		if pvcNamespace != "" {
+			pvcIdentifier = pvcNamespace + "/" + pvcName
+		}
+
+		volumeDescription = volumeDescription + " " + pvcIdentifier
+	}
+
 	// Volume source content is not provided. Create a new volume.
 	poolReq := api.DevLXDStorageVolumesPost{
 		Name:        volName,
 		Type:        "custom", // Only custom volumes can be managed by the CSI.
 		ContentType: contentType,
 		DevLXDStorageVolumePut: api.DevLXDStorageVolumePut{
-			Description: c.driver.VolumeDescription(),
+			Description: volumeDescription,
 			Config: map[string]string{
 				"size": strconv.FormatInt(sizeBytes, 10),
 			},
