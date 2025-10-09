@@ -18,6 +18,7 @@ import (
 	"github.com/canonical/lxd-csi-driver/internal/utils"
 	lxdClient "github.com/canonical/lxd/client"
 	"github.com/canonical/lxd/shared/api"
+	lxdValidate "github.com/canonical/lxd/shared/validate"
 )
 
 // driverVersion is the version of the CSI driver.
@@ -142,6 +143,21 @@ func NewDriver(opts DriverOptions) *Driver {
 	return d
 }
 
+// Validate checks whether the driver configuration is valid.
+func (d *Driver) Validate() error {
+	// Validate volume name prefix.
+	// Ensure the volume name prefix is not longer than 63 characters. The full name is
+	// generated as "<prefix>-<uuid>", where the UUID is 36 characters plus hyphen.
+	// Although the maximum volume name length varies by LXD storage driver, we cap the name
+	// length at 100 characters to stay within safe limits.
+	err := lxdValidate.IsHostname(d.volumeNamePrefix)
+	if err != nil {
+		return fmt.Errorf("Volume name prefix %q is not valid: %v", d.volumeNamePrefix, err)
+	}
+
+	return nil
+}
+
 // DevLXDClient returns the connected DevLXD client.
 // If devLXD token has changed, or connection has not been established yet, a new client is returned.
 func (d *Driver) DevLXDClient() (lxdClient.DevLXDServer, error) {
@@ -208,8 +224,14 @@ func (d *Driver) Run() error {
 		"version", d.version,
 	)
 
+	// Validate drivers configuration.
+	err := d.Validate()
+	if err != nil {
+		return err
+	}
+
 	// Connect to devLXD.
-	_, err := d.DevLXDClient()
+	_, err = d.DevLXDClient()
 	if err != nil {
 		return err
 	}
