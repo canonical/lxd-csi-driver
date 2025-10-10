@@ -45,7 +45,7 @@ tests:
           path: spec.template.spec.containers[*].resources
       - lengthEqual:
           path: spec.template.spec.containers
-          count: 2
+          count: 3
 
   - it: Expect custom name and update strategy when configured
     set:
