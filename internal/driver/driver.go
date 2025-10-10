@@ -18,6 +18,7 @@ import (
 	"github.com/canonical/lxd-csi-driver/internal/utils"
 	lxdClient "github.com/canonical/lxd/client"
 	"github.com/canonical/lxd/shared/api"
+	lxdValidate "github.com/canonical/lxd/shared/validate"
 )
 
 // driverVersion is the version of the CSI driver.
@@ -35,6 +36,10 @@ const (
 
 	// DefaultDriverEndpoint is the default unix socket path for the CSI driver.
 	DefaultDriverEndpoint = "unix:///tmp/csi.sock"
+
+	// DefaultVolumeNamePrefix is the default prefix used for LXD volume names.
+	// Volume names are in format "<prefix>-<uuid>".
+	DefaultVolumeNamePrefix = "lxd-csi"
 
 	// DefaultDevLXDEndpoint is the default unix socket path for connecting to DevLXD.
 	DefaultDevLXDEndpoint = "unix:///dev/lxd/sock"
@@ -75,6 +80,9 @@ type DriverOptions struct {
 	// DevLXD endpoint (unix).
 	DevLXDEndpoint string
 
+	// Prefix used for LXD volume names.
+	VolumeNamePrefix string
+
 	// ID of the node where the driver is running.
 	NodeID string
 }
@@ -105,6 +113,9 @@ type Driver struct {
 	location    string
 	isClustered bool
 
+	// Prefix used for LXD volume names.
+	volumeNamePrefix string
+
 	// gRPC server.
 	server *grpc.Server
 
@@ -115,12 +126,13 @@ type Driver struct {
 // NewDriver initializes a new CSI driver.
 func NewDriver(opts DriverOptions) *Driver {
 	d := &Driver{
-		name:            opts.Name,
-		version:         driverVersion,
-		endpoint:        opts.Endpoint,
-		devLXDEndpoint:  opts.DevLXDEndpoint,
-		devLXDTokenFile: DefaultDevLXDTokenFile,
-		nodeID:          opts.NodeID,
+		name:             opts.Name,
+		version:          driverVersion,
+		endpoint:         opts.Endpoint,
+		devLXDEndpoint:   opts.DevLXDEndpoint,
+		devLXDTokenFile:  DefaultDevLXDTokenFile,
+		volumeNamePrefix: opts.VolumeNamePrefix,
+		nodeID:           opts.NodeID,
 	}
 
 	d.SetControllerServiceCapabilities(
@@ -129,6 +141,21 @@ func NewDriver(opts DriverOptions) *Driver {
 	)
 
 	return d
+}
+
+// Validate checks whether the driver configuration is valid.
+func (d *Driver) Validate() error {
+	// Validate volume name prefix.
+	// Ensure the volume name prefix is not longer than 63 characters. The full name is
+	// generated as "<prefix>-<uuid>", where the UUID is 36 characters plus hyphen.
+	// Although the maximum volume name length varies by LXD storage driver, we cap the name
+	// length at 100 characters to stay within safe limits.
+	err := lxdValidate.IsHostname(d.volumeNamePrefix)
+	if err != nil {
+		return fmt.Errorf("Volume name prefix %q is not valid: %v", d.volumeNamePrefix, err)
+	}
+
+	return nil
 }
 
 // DevLXDClient returns the connected DevLXD client.
@@ -197,8 +224,14 @@ func (d *Driver) Run() error {
 		"version", d.version,
 	)
 
+	// Validate drivers configuration.
+	err := d.Validate()
+	if err != nil {
+		return err
+	}
+
 	// Connect to devLXD.
-	_, err := d.DevLXDClient()
+	_, err = d.DevLXDClient()
 	if err != nil {
 		return err
 	}
