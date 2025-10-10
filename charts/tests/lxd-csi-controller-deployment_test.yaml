@@ -46,7 +46,7 @@ tests:
           path: spec.template.spec.containers[*].resources
       - lengthEqual:
           path: spec.template.spec.containers
-          count: 3
+          count: 4
 
   - it: Expect custom replica count and update strategy when configured
     set:
