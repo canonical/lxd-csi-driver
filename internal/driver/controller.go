@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/canonical/lxd-csi-driver/internal/errors"
 	"github.com/canonical/lxd/lxd/locking"
 	"github.com/canonical/lxd/shared/api"
 )
@@ -41,7 +42,7 @@ func (c *controllerServer) ControllerGetCapabilities(_ context.Context, _ *csi.C
 func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	client, err := c.driver.DevLXDClient()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "CreateVolume: %v", err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: %v", err)
 	}
 
 	// Generate a unique volume name using a UUIDv7 (time-based UUID).
@@ -98,14 +99,14 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	pool, _, err := client.GetStoragePool(poolName)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to retrieve storage pool %q: %v", poolName, err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to retrieve storage pool %q: %v", poolName, err)
 	}
 
 	// Fetch the information about storage pool driver and ensure
 	// it is supported.
 	state, err := client.GetState()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "CreateVolume: %v", err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: %v", err)
 	}
 
 	var driver *api.DevLXDServerStorageDriverInfo
@@ -181,7 +182,7 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	vol, _, err := client.GetStoragePoolVolume(poolName, "custom", volName)
 	if err != nil && !api.StatusErrorCheck(err, http.StatusNotFound) {
-		return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to retrieve storage volume %q from pool %q: %v", volName, poolName, err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to retrieve storage volume %q from pool %q: %v", volName, poolName, err)
 	}
 
 	if vol != nil {
@@ -222,7 +223,7 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	err = client.CreateStoragePoolVolume(poolName, poolReq)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to create volume %q in storage pool %q: %v", volName, poolName, err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to create volume %q in storage pool %q: %v", volName, poolName, err)
 	}
 
 	// Set additional parameters to the volume for later use.
@@ -243,7 +244,7 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	client, err := c.driver.DevLXDClient()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "DeleteVolume: %v", err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "DeleteVolume: %v", err)
 	}
 
 	target, poolName, volName, err := splitVolumeID(req.VolumeId)
@@ -267,7 +268,7 @@ func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	// the operation successful.
 	err = client.DeleteStoragePoolVolume(poolName, "custom", volName)
 	if err != nil && !api.StatusErrorCheck(err, http.StatusNotFound) {
-		return nil, status.Errorf(codes.Internal, "DeleteVolume: Failed to delete volume %q from storage pool %q: %v", volName, poolName, err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "DeleteVolume: Failed to delete volume %q from storage pool %q: %v", volName, poolName, err)
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
@@ -278,7 +279,7 @@ func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	client, err := c.driver.DevLXDClient()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: %v", err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "ControllerPublishVolume: %v", err)
 	}
 
 	target, poolName, volName, err := splitVolumeID(req.VolumeId)
@@ -345,7 +346,7 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 
 	err = client.UpdateInstance(req.NodeId, reqInst, etag)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: Failed to attach volume %q: %v", volName, err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "ControllerPublishVolume: Failed to attach volume %q: %v", volName, err)
 	}
 
 	return &csi.ControllerPublishVolumeResponse{}, nil
@@ -356,7 +357,7 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
 	client, err := c.driver.DevLXDClient()
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ControllerUnpublishVolume: %v", err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "ControllerUnpublishVolume: %v", err)
 	}
 
 	_, _, volName, err := splitVolumeID(req.VolumeId)
@@ -381,7 +382,7 @@ func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *c
 	// If volume attachment does not exist, consider the operation successful.
 	err = client.UpdateInstance(req.NodeId, reqInst, "")
 	if err != nil && !api.StatusErrorCheck(err, http.StatusNotFound) {
-		return nil, status.Errorf(codes.Internal, "ControllerUnpublishVolume: Failed to detach volume %q: %v", volName, err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "ControllerUnpublishVolume: Failed to detach volume %q: %v", volName, err)
 	}
 
 	return &csi.ControllerUnpublishVolumeResponse{}, nil

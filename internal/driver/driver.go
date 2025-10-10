@@ -164,7 +164,7 @@ func (d *Driver) Validate() error {
 	// length at 100 characters to stay within safe limits.
 	err := lxdValidate.IsHostname(d.volumeNamePrefix)
 	if err != nil {
-		return fmt.Errorf("Volume name prefix %q is not valid: %v", d.volumeNamePrefix, err)
+		return fmt.Errorf("Volume name prefix %q is not valid: %w", d.volumeNamePrefix, err)
 	}
 
 	return nil
@@ -187,7 +187,7 @@ func (d *Driver) DevLXDClient() (lxdClient.DevLXDServer, error) {
 	// Read token from the mounted file.
 	tokenBytes, err := os.ReadFile(d.devLXDTokenFile)
 	if err != nil {
-		return nil, fmt.Errorf("Failed reading DevLXD bearer token from file %q: %v", d.devLXDTokenFile, err)
+		return nil, fmt.Errorf("Failed reading DevLXD bearer token from file %q: %w", d.devLXDTokenFile, err)
 	}
 
 	token := string(tokenBytes)
@@ -200,14 +200,14 @@ func (d *Driver) DevLXDClient() (lxdClient.DevLXDServer, error) {
 		// Connect to DevLXD because DevLXD client is not initialized yet.
 		devLXDClient, err = devlxd.Connect(d.devLXDEndpoint, token)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to connect to devLXD: %v", err)
+			return nil, fmt.Errorf("Failed to connect to devLXD: %w", err)
 		}
 	}
 
 	// Refresh DevLXD server information.
 	info, err := devLXDClient.GetState()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get LXD server info: %v", err)
+		return nil, fmt.Errorf("Failed to get LXD server info: %w", err)
 	}
 
 	// Fail early if not authenticated.
@@ -258,7 +258,7 @@ func (d *Driver) Run() error {
 
 	err = fs.WatchFile(ctx, d.devLXDTokenFile, handleTokenFileChange)
 	if err != nil {
-		return fmt.Errorf("Failed to watch DevLXD token file %q for changes: %v", d.devLXDTokenFile, err)
+		return fmt.Errorf("Failed to watch DevLXD token file %q for changes: %w", d.devLXDTokenFile, err)
 	}
 
 	// Construct gRPC unix address.
@@ -272,7 +272,7 @@ func (d *Driver) Run() error {
 
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
-		return fmt.Errorf("Failed to listen on %q: %v", url.String(), err)
+		return fmt.Errorf("Failed to listen on %q: %w", url.String(), err)
 	}
 
 	defer func() { _ = listener.Close() }()
@@ -288,7 +288,7 @@ func (d *Driver) Run() error {
 	klog.InfoS("Listening for connections", "endpoint", url.String())
 	err = d.server.Serve(listener)
 	if err != nil {
-		return fmt.Errorf("Failed to serve gRPC server: %v", err)
+		return fmt.Errorf("Failed to serve gRPC server: %w", err)
 	}
 
 	return nil
