@@ -119,11 +119,11 @@ spec:
               drop:
                 - ALL
           args:
-            - "--node-id=$(NODE_ID)"
-            - "--endpoint=$(CSI_ENDPOINT)"
-            - "--devlxd-endpoint=$(DEVLXD_ENDPOINT)"
+            - --node-id=$(NODE_ID)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --devlxd-endpoint=$(DEVLXD_ENDPOINT)
             {{- if .Values.driver.volumeNamePrefix }}
-            - "--volume-name-prefix={{ .Values.driver.volumeNamePrefix }}"
+            - --volume-name-prefix={{ .Values.driver.volumeNamePrefix }}
             {{- end }}
           env:
             - name: NODE_ID
@@ -153,7 +153,7 @@ spec:
               drop:
                 - ALL
           args:
-            - -v=2
+            - --v=2
             - --csi-address=$(CSI_ADDRESS)
             - --feature-gates=Topology=true
             - --timeout=1200s
@@ -176,9 +176,9 @@ spec:
               drop:
                 - ALL
           args:
-            - "-v=2"
-            - "--csi-address=$(CSI_ADDRESS)"
-            - "--timeout=1200s"
+            - --v=2
+            - --csi-address=$(CSI_ADDRESS)
+            - --timeout=1200s
             - --leader-election
           env:
             - name: CSI_ADDRESS
