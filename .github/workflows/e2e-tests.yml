@@ -79,5 +79,5 @@ jobs:
         run: |
           set -e
           cd test/e2e
-          go install github.com/onsi/ginkgo/v2/ginkgo@v2.25.3
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.26.0
           ginkgo -v --timeout 30m .
