@@ -46,7 +46,7 @@ tests:
           path: spec.template.spec.containers[*].resources
       - lengthEqual:
           path: spec.template.spec.containers
-          count: 3
+          count: 4
 
   - it: Expect custom replica count and update strategy when configured
     set:
@@ -142,6 +142,12 @@ tests:
           resources:
             requests:
               memory: 64Mi
+        csiLivenessProbe:
+          resources:
+            limits:
+              memory: 128Mi
+            requests:
+              memory: 64Mi
     asserts:
       - equal:
           path: spec.template.spec.containers[?(@.name=="lxd-csi-controller")].resources
@@ -160,6 +166,13 @@ tests:
       - equal:
           path: spec.template.spec.containers[?(@.name=="csi-attacher")].resources
           value:
+            requests:
+              memory: 64Mi
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="csi-liveness-probe")].resources
+          value:
+            limits:
+              memory: 128Mi
             requests:
               memory: 64Mi
 
