@@ -177,8 +177,16 @@ var _ = ginkgo.Describe("[Volume read/write]", func() {
 		pvc.Create(ctx)
 		defer pvc.Delete(ctx)
 
+		// Set custom security context to ensure Kubelet mounts the volume with
+		// read and write permissions for non-root users.
+		id := int64(2000)
+		podSecurityContext := &corev1.PodSecurityContext{
+			FSGroup:   &id,
+			RunAsUser: &id,
+		}
+
 		// Create a pod that uses the PVC.
-		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
+		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test").WithSecurityContext(podSecurityContext)
 		pod.Create(ctx)
 		defer pod.Delete(ctx)
 		pod.WaitReady(ctx, 60*time.Second)
