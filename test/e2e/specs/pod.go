@@ -54,6 +54,12 @@ func (p Pod) PrettyName() string {
 	return prettyName(p.Namespace, p.Name)
 }
 
+// WithSecurityContext sets the Pod's security context.
+func (p Pod) WithSecurityContext(securityContext *corev1.PodSecurityContext) Pod {
+	p.Spec.SecurityContext = securityContext
+	return p
+}
+
 // WithPVC adds a PersistentVolumeClaim to the Pod's volumes.
 // The path is the mount path inside the container for filesystem volumes
 // and device path inside the container for block volumes.
