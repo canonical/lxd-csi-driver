@@ -58,11 +58,11 @@ spec:
               */}}
             privileged: true
           args:
-            - "--node-id=$(NODE_NAME)"
-            - "--endpoint=$(CSI_ENDPOINT)"
-            - "--devlxd-endpoint=$(DEVLXD_ENDPOINT)"
+            - --node-id=$(NODE_NAME)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --devlxd-endpoint=$(DEVLXD_ENDPOINT)
             {{- if .Values.driver.volumeNamePrefix }}
-            - "--volume-name-prefix={{ .Values.driver.volumeNamePrefix }}"
+            - --volume-name-prefix={{ .Values.driver.volumeNamePrefix }}
             {{- end }}
           env:
             - name: CSI_ENDPOINT
@@ -99,9 +99,11 @@ spec:
                 - ALL
           args:
             - --v=2
-            - --csi-address=/csi/csi.sock
+            - --csi-address=$(CSI_ENDPOINT)
             - --kubelet-registration-path=$(DRIVER_REGISTRATION_SOCKET_PATH)
           env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
             - name: DRIVER_REGISTRATION_SOCKET_PATH
               value: /var/lib/kubelet/plugins/lxd.csi.canonical.com/csi.sock
             - name: KUBE_NODE_NAME
