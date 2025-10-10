@@ -328,3 +328,18 @@ func (p Pod) WaitGone(ctx context.Context, timeout time.Duration) {
 
 	gomega.Eventually(podGone).WithTimeout(timeout).Should(gomega.BeTrue(), "Pod %q is not gone after %s\n%s", p.PrettyName(), timeout, p.StateString(ctx))
 }
+
+// EnsureNotRunning ensures pod does not become ready for the given period of time.
+func (p Pod) EnsureNotRunning(ctx context.Context, duration time.Duration) {
+	ginkgo.By("Ensure Pod " + p.PrettyName() + " does not become ready")
+	podPhase := func() corev1.PodPhase {
+		state, err := p.State(ctx)
+		if err != nil {
+			return corev1.PodUnknown
+		}
+
+		return state.Status.Phase
+	}
+
+	gomega.Consistently(podPhase, duration).ShouldNot(gomega.Equal(corev1.PodRunning), "Pod %q unexpectedly became ready\n%s", p.PrettyName(), p.StateString(ctx))
+}
