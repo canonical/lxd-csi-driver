@@ -158,6 +158,7 @@ spec:
             - --feature-gates=Topology=true
             - --timeout=1200s
             - --leader-election
+            - --extra-create-metadata
           env:
             - name: CSI_ADDRESS
               value: /csi/csi.sock

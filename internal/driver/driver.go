@@ -67,6 +67,18 @@ const (
 	//
 	// This is internal parameter used only by the CSI driver.
 	ParameterStorageDriver = "internal.storageDriver"
+
+	// ParameterPVCName contains the name of the PVC that triggered volume creation.
+	// It is passed to the controller by the CSI provisioner.
+	ParameterPVCName = "csi.storage.k8s.io/pvc/name"
+
+	// ParameterPVCNamespace contains the namespace of the PVC that triggered volume creation.
+	// It is passed to the controller by the CSI provisioner.
+	ParameterPVCNamespace = "csi.storage.k8s.io/pvc/namespace"
+
+	// ParameterPVName contains the name of the PV that represents the LXD volume.
+	// It is passed to the controller by the CSI provisioner.
+	ParameterPVName = "csi.storage.k8s.io/pv/name"
 )
 
 // DriverOptions contains the configurable options for the driver.
@@ -302,12 +314,6 @@ func (d *Driver) SetNodeServiceCapabilities(caps ...csi.NodeServiceCapability_RP
 	}
 
 	d.nodeCapabilities = capabilities
-}
-
-// VolumeDescription returns the generic description for the volume
-// that is managed by the CSI driver.
-func (d *Driver) VolumeDescription() string {
-	return "Managed by " + d.name
 }
 
 // getVolumeID constructs a unique volume ID based on the cluster member,
