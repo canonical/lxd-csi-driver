@@ -126,6 +126,12 @@ tests:
           resources:
             limits:
               cpu: 100m
+        csiLivenessProbe:
+          resources:
+            limits:
+              memory: 128Mi
+            requests:
+              memory: 64Mi
     asserts:
       - equal:
           path: spec.template.spec.containers[?(@.name=="lxd-csi-node")].resources
@@ -141,6 +147,13 @@ tests:
           value:
             limits:
               cpu: 100m
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="csi-liveness-probe")].resources
+          value:
+            limits:
+              memory: 128Mi
+            requests:
+              memory: 64Mi
 
   - it: Expect custom image when configured
     set:
