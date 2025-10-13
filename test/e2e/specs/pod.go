@@ -54,6 +54,12 @@ func (p Pod) PrettyName() string {
 	return prettyName(p.Namespace, p.Name)
 }
 
+// WithSecurityContext sets the Pod's security context.
+func (p Pod) WithSecurityContext(securityContext *corev1.PodSecurityContext) Pod {
+	p.Spec.SecurityContext = securityContext
+	return p
+}
+
 // WithPVC adds a PersistentVolumeClaim to the Pod's volumes.
 // The path is the mount path inside the container for filesystem volumes
 // and device path inside the container for block volumes.
@@ -327,4 +333,19 @@ func (p Pod) WaitGone(ctx context.Context, timeout time.Duration) {
 	}
 
 	gomega.Eventually(podGone).WithTimeout(timeout).Should(gomega.BeTrue(), "Pod %q is not gone after %s\n%s", p.PrettyName(), timeout, p.StateString(ctx))
+}
+
+// EnsureNotRunning ensures pod does not become ready for the given period of time.
+func (p Pod) EnsureNotRunning(ctx context.Context, duration time.Duration) {
+	ginkgo.By("Ensure Pod " + p.PrettyName() + " does not become ready")
+	podPhase := func() corev1.PodPhase {
+		state, err := p.State(ctx)
+		if err != nil {
+			return corev1.PodUnknown
+		}
+
+		return state.Status.Phase
+	}
+
+	gomega.Consistently(podPhase, duration).ShouldNot(gomega.Equal(corev1.PodRunning), "Pod %q unexpectedly became ready\n%s", p.PrettyName(), p.StateString(ctx))
 }
