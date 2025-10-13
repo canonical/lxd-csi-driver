@@ -257,30 +257,34 @@ var _ = ginkgo.Describe("[Volume release]", func() {
 		defer pvc.Delete(ctx)
 
 		// Create a pod.
-		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
-		pod.Create(ctx)
-		defer pod.Delete(ctx)
-		pod.WaitReady(ctx, 60*time.Second)
+		pod1 := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
+		pod1.Create(ctx)
+		defer pod1.Delete(ctx)
+		pod1.WaitReady(ctx, 60*time.Second)
 
 		// Write to the volume.
 		path := "/mnt/test/test.txt"
 		msg := []byte("Hello, LXD CSI!")
-		err := pod.WriteFile(ctx, cfg, path, msg)
+		err := pod1.WriteFile(ctx, cfg, path, msg)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		// Read back the data.
-		data, err := pod.ReadFile(ctx, cfg, path)
+		data, err := pod1.ReadFile(ctx, cfg, path)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(data).To(gomega.Equal(msg))
 
 		// Recreate the pod.
-		pod.Delete(ctx)
-		pod.Create(ctx)
-		pod.WaitReady(ctx, 30*time.Second)
+		pod1.Delete(ctx)
+
+		pod2 := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
+		pod2.Create(ctx)
+		defer pod2.Delete(ctx)
+
+		pod2.WaitReady(ctx, 60*time.Second)
 		pvc.WaitBound(ctx, 30*time.Second)
 
 		// Ensure the data is still there.
-		data, err = pod.ReadFile(ctx, cfg, path)
+		data, err = pod2.ReadFile(ctx, cfg, path)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(data).To(gomega.Equal(msg))
 	})
