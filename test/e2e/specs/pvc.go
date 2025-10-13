@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -171,7 +170,7 @@ func (pvc *PersistentVolumeClaim) Delete(ctx context.Context) {
 
 	err = pvc.delete(ctx, nil)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to delete PVC %q\n%s", pvc.PrettyName(), pvc.StateString(ctx))
-	pvc.WaitGone(ctx, 30*time.Second)
+	pvc.WaitGone(ctx)
 }
 
 // ForceDelete forcefully deletes the PersistentVolumeClaim from the Kubernetes cluster.
@@ -186,9 +185,9 @@ func (pvc PersistentVolumeClaim) ForceDelete(ctx context.Context) {
 }
 
 // WaitBound waits until the PersistentVolumeClaim is bound to a PersistentVolume.
-func (pvc PersistentVolumeClaim) WaitBound(ctx context.Context, timeout time.Duration) {
+func (pvc PersistentVolumeClaim) WaitBound(ctx context.Context) {
 	ginkgo.By("Wait for PersistentVolumeClaim " + pvc.PrettyName() + " to be bound")
-	pvcPhase := func() corev1.PersistentVolumeClaimPhase {
+	pvcPhase := func(ctx context.Context) corev1.PersistentVolumeClaimPhase {
 		state, err := pvc.State(ctx)
 		if err != nil {
 			return ""
@@ -197,13 +196,13 @@ func (pvc PersistentVolumeClaim) WaitBound(ctx context.Context, timeout time.Dur
 		return state.Status.Phase
 	}
 
-	gomega.Eventually(pvcPhase).WithTimeout(timeout).Should(gomega.Equal(corev1.ClaimBound), "PVC %q is not bound after %s\n%s", pvc.PrettyName(), timeout, pvc.StateString(ctx))
+	gomega.Eventually(pvcPhase).WithContext(ctx).Should(gomega.Equal(corev1.ClaimBound), "PVC %q is not bound\n%s", pvc.PrettyName(), pvc.StateString(ctx))
 }
 
 // WaitSize waits until the PersistentVolumeClaim is resized to desired size.
-func (pvc PersistentVolumeClaim) WaitSize(ctx context.Context, size string, timeout time.Duration) {
+func (pvc PersistentVolumeClaim) WaitSize(ctx context.Context, size string) {
 	ginkgo.By("Wait size of PersistentVolumeClaim " + pvc.PrettyName() + " to be " + size)
-	pvcSize := func() string {
+	pvcSize := func(ctx context.Context) string {
 		state, err := pvc.State(ctx)
 		if err != nil {
 			return ""
@@ -217,29 +216,29 @@ func (pvc PersistentVolumeClaim) WaitSize(ctx context.Context, size string, time
 		return v.String()
 	}
 
-	gomega.Eventually(pvcSize).WithTimeout(timeout).Should(gomega.Equal(size), "PVC %q size is not %q after %s\n%s", pvc.PrettyName(), size, timeout, pvc.StateString(ctx))
+	gomega.Eventually(pvcSize).WithContext(ctx).Should(gomega.Equal(size), "PVC %q size is not %q\n%s", pvc.PrettyName(), size, pvc.StateString(ctx))
 }
 
 // WaitGone waits until the PVC is no longer present in the Kubernetes cluster.
-func (pvc PersistentVolumeClaim) WaitGone(ctx context.Context, timeout time.Duration) {
+func (pvc PersistentVolumeClaim) WaitGone(ctx context.Context) {
 	ginkgo.By("Wait for PersistentVolumeClaim " + pvc.PrettyName() + " to be gone")
-	pvcGone := func() bool {
+	pvcGone := func(ctx context.Context) bool {
 		_, err := pvc.State(ctx)
 		return apierrors.IsNotFound(err)
 	}
 
-	gomega.Eventually(pvcGone).WithTimeout(timeout).Should(gomega.BeTrue(), "PVC %q is not gone after %s\n%s", pvc.PrettyName(), timeout, pvc.StateString(ctx))
+	gomega.Eventually(pvcGone).WithContext(ctx).Should(gomega.BeTrue(), "PVC %q is not gone\n%s", pvc.PrettyName(), pvc.StateString(ctx))
 
 	// Wait for the underlying PV to be removed as well if the volumeName
 	// was stored before the PVC was removed.
 	if pvc.volumeName != "" {
 		ginkgo.By("Wait for PersistentVolume " + pvc.volumeName + " to be gone")
 
-		pvGone := func() bool {
+		pvGone := func(ctx context.Context) bool {
 			_, err := pvc.client.CoreV1().PersistentVolumes().Get(ctx, pvc.volumeName, metav1.GetOptions{})
 			return apierrors.IsNotFound(err)
 		}
 
-		gomega.Eventually(pvGone).WithTimeout(timeout).Should(gomega.BeTrue(), "PV %q is not gone after %s", pvc.volumeName, timeout)
+		gomega.Eventually(pvGone).WithContext(ctx).Should(gomega.BeTrue(), "PV %q is not gone", pvc.volumeName)
 	}
 }
