@@ -38,9 +38,10 @@ func NewPod(client *kubernetes.Clientset, name string, namespace string) Pod {
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:    "container",
-					Image:   testContainerImage,
-					Command: []string{"/bin/sh", "-c", "sleep infinity"},
+					Name:            "container",
+					Image:           testContainerImage,
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Command:         []string{"/bin/sh", "-c", "sleep infinity"},
 				},
 			},
 		},
