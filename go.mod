@@ -6,10 +6,11 @@ require (
 	github.com/canonical/lxd v0.0.0-20250926100704-67c48a397530
 	github.com/container-storage-interface/spec v1.11.0
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.26.0
 	github.com/onsi/gomega v1.38.2
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/sys v0.36.0
+	golang.org/x/sys v0.37.0
 	google.golang.org/grpc v1.75.1
 	google.golang.org/protobuf v1.36.10
 	k8s.io/api v0.34.1
@@ -48,7 +49,6 @@ require (
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20250923004556-9e5a51aed1e8 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
