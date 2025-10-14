@@ -58,11 +58,11 @@ spec:
               */}}
             privileged: true
           args:
-            - "--node-id=$(NODE_NAME)"
-            - "--endpoint=$(CSI_ENDPOINT)"
-            - "--devlxd-endpoint=$(DEVLXD_ENDPOINT)"
+            - --node-id=$(NODE_NAME)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --devlxd-endpoint=$(DEVLXD_ENDPOINT)
             {{- if .Values.driver.volumeNamePrefix }}
-            - "--volume-name-prefix={{ .Values.driver.volumeNamePrefix }}"
+            - --volume-name-prefix={{ .Values.driver.volumeNamePrefix }}
             {{- end }}
           env:
             - name: CSI_ENDPOINT
@@ -87,6 +87,15 @@ spec:
             - name: lxd-csi-secret
               mountPath: /etc/lxd-csi-driver
               readOnly: true
+          livenessProbe:
+            httpGet:
+              host: localhost
+              path: /healthz
+              port: 39008
+            failureThreshold: 3
+            initialDelaySeconds: 5
+            timeoutSeconds: 10
+            periodSeconds: 30
           {{- if .Values.node.resources }}
           resources: {{ toYaml .Values.node.resources | nindent 12 }}
           {{- end }}
@@ -99,9 +108,11 @@ spec:
                 - ALL
           args:
             - --v=2
-            - --csi-address=/csi/csi.sock
+            - --csi-address=$(CSI_ENDPOINT)
             - --kubelet-registration-path=$(DRIVER_REGISTRATION_SOCKET_PATH)
           env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
             - name: DRIVER_REGISTRATION_SOCKET_PATH
               value: /var/lib/kubelet/plugins/lxd.csi.canonical.com/csi.sock
             - name: KUBE_NODE_NAME
@@ -115,6 +126,23 @@ spec:
               mountPath: /registration
           {{- if .Values.node.nodeDriverRegistrar.resources }}
           resources: {{ toYaml .Values.node.nodeDriverRegistrar.resources | nindent 12 }}
+          {{- end }}
+        - name: csi-liveness-probe
+          image: {{ printf "%s:%s" .Values.node.csiLivenessProbe.image.repository .Values.node.csiLivenessProbe.image.tag }}
+          imagePullPolicy: {{ .Values.node.csiLivenessProbe.image.pullPolicy }}
+          args:
+            - --v=2
+            - --csi-address=$(CSI_ADDRESS)
+            - --http-endpoint=127.0.0.1:39008
+            - --probe-timeout=3s
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+          {{- if .Values.node.csiLivenessProbe.resources }}
+          resources: {{ toYaml .Values.node.csiLivenessProbe.resources | nindent 12 }}
           {{- end }}
       volumes:
         - name: plugin-dir

@@ -119,11 +119,11 @@ spec:
               drop:
                 - ALL
           args:
-            - "--node-id=$(NODE_ID)"
-            - "--endpoint=$(CSI_ENDPOINT)"
-            - "--devlxd-endpoint=$(DEVLXD_ENDPOINT)"
+            - --node-id=$(NODE_ID)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --devlxd-endpoint=$(DEVLXD_ENDPOINT)
             {{- if .Values.driver.volumeNamePrefix }}
-            - "--volume-name-prefix={{ .Values.driver.volumeNamePrefix }}"
+            - --volume-name-prefix={{ .Values.driver.volumeNamePrefix }}
             {{- end }}
           env:
             - name: NODE_ID
@@ -142,6 +142,15 @@ spec:
             - name: lxd-csi-secret
               mountPath: /etc/lxd-csi-driver
               readOnly: true
+          livenessProbe:
+            httpGet:
+              host: localhost
+              path: /healthz
+              port: 39008
+            failureThreshold: 3
+            initialDelaySeconds: 5
+            timeoutSeconds: 10
+            periodSeconds: 30
           {{- with .Values.controller.resources }}
           resources: {{ toYaml . | nindent 12 }}
           {{- end }}
@@ -153,7 +162,7 @@ spec:
               drop:
                 - ALL
           args:
-            - -v=2
+            - --v=2
             - --csi-address=$(CSI_ADDRESS)
             - --feature-gates=Topology=true
             - --timeout=1200s
@@ -176,9 +185,9 @@ spec:
               drop:
                 - ALL
           args:
-            - "-v=2"
-            - "--csi-address=$(CSI_ADDRESS)"
-            - "--timeout=1200s"
+            - --v=2
+            - --csi-address=$(CSI_ADDRESS)
+            - --timeout=1200s
             - --leader-election
           env:
             - name: CSI_ADDRESS
@@ -188,6 +197,23 @@ spec:
               mountPath: /csi
           {{- with .Values.controller.csiAttacher.resources }}
           resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+        - name: csi-liveness-probe
+          image: {{ printf "%s:%s" .Values.controller.csiLivenessProbe.image.repository .Values.controller.csiLivenessProbe.image.tag }}
+          imagePullPolicy: {{ .Values.controller.csiLivenessProbe.image.pullPolicy }}
+          args:
+            - --v=2
+            - --csi-address=$(CSI_ADDRESS)
+            - --http-endpoint=127.0.0.1:39008
+            - --probe-timeout=3s
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          {{- if .Values.controller.csiLivenessProbe.resources }}
+          resources: {{ toYaml .Values.controller.csiLivenessProbe.resources | nindent 12 }}
           {{- end }}
       volumes:
         - name: lxd-csi-secret

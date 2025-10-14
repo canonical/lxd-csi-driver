@@ -7,7 +7,6 @@ driver:
     tag: ""
     pullPolicy: IfNotPresent
 
-
   # -- (list) Image pull secrets for the CSI controller containers.
   imagePullSecrets: []
     # - name: myRegistryKeySecret
@@ -137,6 +136,20 @@ controller:
       #   cpu: 10m
       #   memory: 64Mi
 
+  # -- CSI liveness probe sidecar container configuration.
+  csiLivenessProbe:
+    image:
+      repository: registry.k8s.io/sig-storage/livenessprobe
+      tag: v2.17.0
+      pullPolicy: IfNotPresent
+    resources: {}
+      # limits:
+      #   cpu: 100m
+      #   memory: 256Mi
+      # requests:
+      #   cpu: 10m
+      #   memory: 64Mi
+
 # -- CSI Node Plugin (DaemonSet) specific configuration.
 node:
   # -- (string) Name of the CSI node daemon set.
@@ -208,6 +221,20 @@ node:
     image:
       repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
       tag: v2.13.0
+      pullPolicy: IfNotPresent
+    resources: {}
+      # limits:
+      #   cpu: 100m
+      #   memory: 256Mi
+      # requests:
+      #   cpu: 10m
+      #   memory: 64Mi
+
+  # -- CSI liveness probe sidecar container configuration.
+  csiLivenessProbe:
+    image:
+      repository: registry.k8s.io/sig-storage/livenessprobe
+      tag: v2.17.0
       pullPolicy: IfNotPresent
     resources: {}
       # limits:
