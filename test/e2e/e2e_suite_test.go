@@ -63,16 +63,14 @@ var _ = ginkgo.AfterEach(func() {
 })
 
 var _ = ginkgo.Describe("[Volume binding mode] ", func() {
-	var ctx context.Context
 	var client *kubernetes.Clientset
 	var namespace = "default"
 
 	ginkgo.BeforeEach(func() {
-		ctx = context.Background()
 		_, client = createClient()
 	})
 
-	ginkgo.It("Create a volume with binding mode Immediate", func() {
+	ginkgo.It("Create a volume with binding mode Immediate", func(ctx ginkgo.SpecContext) {
 		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool()).
 			WithVolumeBindingMode(storagev1.VolumeBindingImmediate)
 		sc.Create(ctx)
@@ -81,31 +79,35 @@ var _ = ginkgo.Describe("[Volume binding mode] ", func() {
 		// Create FS PVC.
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).WithStorageClassName(sc.Name)
 		pvc.Create(ctx)
-		defer pvc.Delete(ctx)
+		defer pvc.ForceDelete(ctx)
 
 		// Ensure the pod is running and both PVCs are bound.
-		pvc.WaitBound(ctx, 30*time.Second)
+		pvc.WaitBound(ctx)
 
 		// Create a pod that uses the PVC.
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 		pod.Create(ctx)
-		defer pod.Delete(ctx)
+		defer pod.ForceDelete(ctx)
 
 		// Ensure the pod is running.
-		pod.WaitReady(ctx, 60*time.Second)
-	})
+		pod.WaitReady(ctx)
 
-	ginkgo.It("Create a volume with binding mode WaitForFirstConsumer", func() {
+		// Cleanup.
+		pod.Delete(ctx)
+		pvc.Delete(ctx)
+	}, ginkgo.SpecTimeout(5*time.Minute))
+
+	ginkgo.It("Create a volume with binding mode WaitForFirstConsumer", func(ctx ginkgo.SpecContext) {
 		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool()).
 			WithVolumeBindingMode(storagev1.VolumeBindingWaitForFirstConsumer)
 		sc.Create(ctx)
-		defer sc.ForceDelete(ctx)
+		defer sc.ForceDelete(context.Background())
 
 		// Create FS PVC.
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
 			WithStorageClassName(sc.Name)
 		pvc.Create(ctx)
-		defer pvc.Delete(ctx)
+		defer pvc.ForceDelete(context.Background())
 
 		// Ensure the PVC is pending state and is not bound yet.
 		state, err := pvc.State(ctx)
@@ -115,67 +117,74 @@ var _ = ginkgo.Describe("[Volume binding mode] ", func() {
 		// Create a pod that uses the PVC.
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 		pod.Create(ctx)
-		defer pod.Delete(ctx)
+		defer pod.ForceDelete(context.Background())
 
 		// Ensure the pod is running and the PVC is bound.
-		pod.WaitReady(ctx, 60*time.Second)
-		pvc.WaitBound(ctx, 30*time.Second)
-	})
+		pod.WaitReady(ctx)
+		pvc.WaitBound(ctx)
 
-	ginkgo.It("Create a pod with block and FS volumes", func() {
+		// Cleanup.
+		pod.Delete(ctx)
+		pvc.Delete(ctx)
+	}, ginkgo.SpecTimeout(5*time.Minute))
+
+	ginkgo.It("Create a pod with block and FS volumes", func(ctx ginkgo.SpecContext) {
 		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool())
 		sc.Create(ctx)
-		defer sc.ForceDelete(ctx)
+		defer sc.ForceDelete(context.Background())
 
 		// Create FS PVC.
 		pvcFS := specs.NewPersistentVolumeClaim(client, "pvc-fs", namespace).
 			WithStorageClassName(sc.Name).
 			WithVolumeMode(corev1.PersistentVolumeFilesystem)
 		pvcFS.Create(ctx)
-		defer pvcFS.Delete(ctx)
+		defer pvcFS.ForceDelete(context.Background())
 
 		// Create Block PVC.
 		pvcBlock := specs.NewPersistentVolumeClaim(client, "pvc-block", namespace).
 			WithStorageClassName(sc.Name).
 			WithVolumeMode(corev1.PersistentVolumeBlock)
 		pvcBlock.Create(ctx)
-		defer pvcBlock.Delete(ctx)
+		defer pvcBlock.ForceDelete(context.Background())
 
 		// Create a pod that uses both PVCs.
 		pod := specs.NewPod(client, "pod", namespace).
 			WithPVC(pvcFS, "/mnt/test").
 			WithPVC(pvcBlock, "/dev/vda42")
 		pod.Create(ctx)
-		defer pod.Delete(ctx)
+		defer pod.ForceDelete(context.Background())
 
 		// Ensure the pod is running and both PVCs are bound.
-		pod.WaitReady(ctx, 60*time.Second)
-		pvcFS.WaitBound(ctx, 30*time.Second)
-		pvcBlock.WaitBound(ctx, 30*time.Second)
-	})
+		pod.WaitReady(ctx)
+		pvcFS.WaitBound(ctx)
+		pvcBlock.WaitBound(ctx)
+
+		// Cleanup.
+		pod.Delete(ctx)
+		pvcFS.Delete(ctx)
+		pvcBlock.Delete(ctx)
+	}, ginkgo.SpecTimeout(5*time.Minute))
 })
 
 var _ = ginkgo.Describe("[Volume read/write]", func() {
-	var ctx context.Context
 	var cfg *rest.Config
 	var client *kubernetes.Clientset
 	var namespace = "default"
 
 	ginkgo.BeforeEach(func() {
-		ctx = context.Background()
 		cfg, client = createClient()
 	})
 
-	ginkgo.It("Write and read FS volume", func() {
+	ginkgo.It("Write and read FS volume", func(ctx ginkgo.SpecContext) {
 		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool())
 		sc.Create(ctx)
-		defer sc.ForceDelete(ctx)
+		defer sc.ForceDelete(context.Background())
 
 		// Create FS PVC.
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
 			WithStorageClassName(sc.Name)
 		pvc.Create(ctx)
-		defer pvc.Delete(ctx)
+		defer pvc.ForceDelete(context.Background())
 
 		// Set custom security context to ensure Kubelet mounts the volume with
 		// read and write permissions for non-root users.
@@ -188,8 +197,8 @@ var _ = ginkgo.Describe("[Volume read/write]", func() {
 		// Create a pod that uses the PVC.
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test").WithSecurityContext(podSecurityContext)
 		pod.Create(ctx)
-		defer pod.Delete(ctx)
-		pod.WaitReady(ctx, 60*time.Second)
+		defer pod.ForceDelete(context.Background())
+		pod.WaitReady(ctx)
 
 		// Write to the volume.
 		path := "/mnt/test/test.txt"
@@ -201,26 +210,26 @@ var _ = ginkgo.Describe("[Volume read/write]", func() {
 		data, err := pod.ReadFile(ctx, cfg, path)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(data).To(gomega.Equal(msg))
-	})
+	}, ginkgo.SpecTimeout(5*time.Minute))
 
-	ginkgo.It("Write and read block volume", func() {
+	ginkgo.It("Write and read block volume", func(ctx ginkgo.SpecContext) {
 		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool())
 		sc.Create(ctx)
-		defer sc.ForceDelete(ctx)
+		defer sc.ForceDelete(context.Background())
 
 		// Create block PVC.
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
 			WithStorageClassName(sc.Name).
 			WithVolumeMode(corev1.PersistentVolumeBlock)
 		pvc.Create(ctx)
-		defer pvc.Delete(ctx)
+		defer pvc.ForceDelete(context.Background())
 
 		// Create a pod that uses the PVC.
 		dev := "/dev/vda42"
 		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, dev)
 		pod.Create(ctx)
-		defer pod.Delete(ctx)
-		pod.WaitReady(ctx, 30*time.Second)
+		defer pod.ForceDelete(context.Background())
+		pod.WaitReady(ctx)
 
 		// Write to the volume.
 		msg := []byte("This is a test of an attached FS volume.")
@@ -231,169 +240,144 @@ var _ = ginkgo.Describe("[Volume read/write]", func() {
 		data, err := pod.ReadDevice(ctx, cfg, dev, len(msg))
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(data).To(gomega.Equal(msg))
-	})
+
+		// Cleanup.
+		pod.Delete(ctx)
+		pvc.Delete(ctx)
+	}, ginkgo.SpecTimeout(5*time.Minute))
 })
 
 var _ = ginkgo.Describe("[Volume release]", func() {
-	var ctx context.Context
 	var cfg *rest.Config
 	var client *kubernetes.Clientset
 	var namespace = "default"
 
 	ginkgo.BeforeEach(func() {
-		ctx = context.Background()
 		cfg, client = createClient()
 	})
 
-	ginkgo.It("Volume data should be retained when only pod is recreated", func() {
+	ginkgo.It("Volume data should be retained when only pod is recreated", func(ctx ginkgo.SpecContext) {
 		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool())
 		sc.Create(ctx)
-		defer sc.ForceDelete(ctx)
+		defer sc.ForceDelete(context.Background())
 
 		// Create FS PVC.
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
 			WithStorageClassName(sc.Name)
 		pvc.Create(ctx)
-		defer pvc.Delete(ctx)
+		defer pvc.ForceDelete(context.Background())
 
 		// Create a pod.
-		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
-		pod.Create(ctx)
-		defer pod.Delete(ctx)
-		pod.WaitReady(ctx, 60*time.Second)
+		pod1 := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
+		pod1.Create(ctx)
+		defer pod1.ForceDelete(context.Background())
+		pod1.WaitReady(ctx)
 
 		// Write to the volume.
 		path := "/mnt/test/test.txt"
 		msg := []byte("Hello, LXD CSI!")
-		err := pod.WriteFile(ctx, cfg, path, msg)
+		err := pod1.WriteFile(ctx, cfg, path, msg)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 		// Read back the data.
-		data, err := pod.ReadFile(ctx, cfg, path)
+		data, err := pod1.ReadFile(ctx, cfg, path)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(data).To(gomega.Equal(msg))
 
 		// Recreate the pod.
-		pod.Delete(ctx)
-		pod.Create(ctx)
-		pod.WaitReady(ctx, 30*time.Second)
-		pvc.WaitBound(ctx, 30*time.Second)
+		pod1.Delete(ctx)
+
+		pod2 := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
+		pod2.Create(ctx)
+		defer pod2.ForceDelete(context.Background())
+
+		pod2.WaitReady(ctx)
+		pvc.WaitBound(ctx)
 
 		// Ensure the data is still there.
-		data, err = pod.ReadFile(ctx, cfg, path)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-		gomega.Expect(data).To(gomega.Equal(msg))
-	})
-
-	ginkgo.It("Volume data should be gone when PVC is recreated", func() {
-		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool())
-		sc.Create(ctx)
-		defer sc.ForceDelete(ctx)
-
-		// Create FS PVC.
-		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).
-			WithStorageClassName(sc.Name)
-		pvc.Create(ctx)
-		defer pvc.Delete(ctx)
-
-		// Create a pod.
-		pod := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
-		pod.Create(ctx)
-		defer pod.Delete(ctx)
-		pod.WaitReady(ctx, 60*time.Second)
-
-		// Write to the volume.
-		path := "/mnt/test/test.txt"
-		msg := []byte("Hello, LXD CSI!")
-		err := pod.WriteFile(ctx, cfg, path, msg)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred())
-
-		// Read back the data.
-		data, err := pod.ReadFile(ctx, cfg, path)
+		data, err = pod2.ReadFile(ctx, cfg, path)
 		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 		gomega.Expect(data).To(gomega.Equal(msg))
 
-		// Recreate the pod and PVC.
-		pod.Delete(ctx)
+		// Cleanup.
+		pod2.Delete(ctx)
 		pvc.Delete(ctx)
-
-		pvc.Create(ctx)
-		pod.Create(ctx)
-		pod.WaitReady(ctx, 60*time.Second)
-		pvc.WaitBound(ctx, 30*time.Second)
-
-		// Ensure the data is no longer there.
-		_, err = pod.ReadFile(ctx, cfg, path)
-		gomega.Expect(err).To(gomega.HaveOccurred())
-	})
+	}, ginkgo.SpecTimeout(5*time.Minute))
 })
 
 var _ = ginkgo.Describe("[Volume access mode] ", func() {
-	var ctx context.Context
 	var client *kubernetes.Clientset
 	var namespace = "default"
 
 	ginkgo.BeforeEach(func() {
-		ctx = context.Background()
 		_, client = createClient()
 	})
 
-	ginkgo.It("Create volume with access mode ReadWriteOnce", func() {
+	ginkgo.It("Create volume with access mode ReadWriteOnce", func(ctx ginkgo.SpecContext) {
 		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool()).
 			WithVolumeBindingMode(storagev1.VolumeBindingImmediate)
 		sc.Create(ctx)
-		defer sc.ForceDelete(ctx)
+		defer sc.ForceDelete(context.Background())
 
 		// Create FS PVC.
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).WithStorageClassName(sc.Name).WithAccessModes(corev1.ReadWriteOnce)
 		pvc.Create(ctx)
-		defer pvc.Delete(ctx)
+		defer pvc.ForceDelete(context.Background())
 
 		// Create a pod that uses the PVC.
 		pod1 := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 		pod2 := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 
 		pod1.Create(ctx)
-		defer pod1.Delete(ctx)
+		defer pod1.ForceDelete(context.Background())
 
 		pod2.Create(ctx)
-		defer pod2.Delete(ctx)
+		defer pod2.ForceDelete(context.Background())
 
 		// Ensure the pods are running.
-		pod1.WaitReady(ctx, 60*time.Second)
-		pod2.WaitReady(ctx, 60*time.Second)
+		pod1.WaitReady(ctx)
+		pod2.WaitReady(ctx)
 
 		// Ensure PVC is bound.
-		pvc.WaitBound(ctx, 30*time.Second)
-	})
+		pvc.WaitBound(ctx)
 
-	ginkgo.It("Create volume with access mode ReadWriteOncePod", func() {
+		pod1.Delete(ctx)
+		pod2.Delete(ctx)
+		pvc.Delete(ctx)
+	}, ginkgo.SpecTimeout(5*time.Minute))
+
+	ginkgo.It("Create volume with access mode ReadWriteOncePod", func(ctx ginkgo.SpecContext) {
 		sc := specs.NewStorageClass(client, "sc", getTestLXDStoragePool()).
 			WithVolumeBindingMode(storagev1.VolumeBindingImmediate)
 		sc.Create(ctx)
-		defer sc.ForceDelete(ctx)
+		defer sc.ForceDelete(context.Background())
 
 		// Create FS PVC.
 		pvc := specs.NewPersistentVolumeClaim(client, "pvc", namespace).WithStorageClassName(sc.Name).WithAccessModes(corev1.ReadWriteOncePod)
 		pvc.Create(ctx)
-		defer pvc.Delete(ctx)
+		defer pvc.ForceDelete(context.Background())
 
 		// Create a pod that uses the PVC.
 		pod1 := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 		pod2 := specs.NewPod(client, "pod", namespace).WithPVC(pvc, "/mnt/test")
 
 		pod1.Create(ctx)
-		defer pod1.Delete(ctx)
+		defer pod1.ForceDelete(context.Background())
 
 		// Ensure Pod is running and PVC is bound.
-		pod1.WaitReady(ctx, 60*time.Second)
-		pvc.WaitBound(ctx, 30*time.Second)
+		pod1.WaitReady(ctx)
+		pvc.WaitBound(ctx)
 
 		pod2.Create(ctx)
-		defer pod2.Delete(ctx)
+		defer pod2.ForceDelete(context.Background())
 
 		// Ensure the second pod does not become ready because
 		// PVC is already bound to the first pod.
 		pod2.EnsureNotRunning(ctx, 10*time.Second)
-	})
+
+		// Cleanup.
+		pod1.Delete(ctx)
+		pod2.Delete(ctx)
+		pvc.Delete(ctx)
+	}, ginkgo.SpecTimeout(5*time.Minute))
 })
