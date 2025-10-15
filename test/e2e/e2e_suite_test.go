@@ -80,7 +80,12 @@ func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 
 	config := make(map[string]string)
 	if driver != "dir" {
-		config["size"] = "128MiB"
+		config["size"] = "512MiB"
+		config["volume.size"] = "128MiB"
+	}
+
+	if driver == "lvm" {
+		config["lvm.use_thinpool"] = "false"
 	}
 
 	req := api.StoragePoolsPost{
