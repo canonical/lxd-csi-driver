@@ -41,6 +41,11 @@ func createClient() (*rest.Config, *kubernetes.Clientset) {
 	config, err := clientcmd.BuildConfigFromFlags("", path)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
+	// Increase client-side queries per second (QPS) and burst
+	// to avoid rate limit failures in tests.
+	config.QPS = 50
+	config.Burst = 100
+
 	client, err := kubernetes.NewForConfig(config)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
