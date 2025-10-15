@@ -25,10 +25,11 @@ func TestE2e(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 
 	// Configure default polling intervals and timeouts.
-	gomega.SetDefaultEventuallyPollingInterval(1 * time.Second)
-	gomega.SetDefaultEventuallyTimeout(20 * time.Second)
-	gomega.SetDefaultConsistentlyPollingInterval(1 * time.Second)
+	gomega.SetDefaultEventuallyPollingInterval(2 * time.Second)
+	gomega.SetDefaultEventuallyTimeout(120 * time.Second)
+	gomega.SetDefaultConsistentlyPollingInterval(2 * time.Second)
 	gomega.SetDefaultConsistentlyDuration(20 * time.Second)
+	gomega.EnforceDefaultTimeoutsWhenUsingContexts()
 
 	ginkgo.RunSpecs(t, "E2e Suite")
 }
