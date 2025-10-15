@@ -41,7 +41,7 @@ func NewPod(client *kubernetes.Clientset, name string, namespace string) Pod {
 					Name:            "container",
 					Image:           testContainerImage,
 					ImagePullPolicy: corev1.PullIfNotPresent,
-					Command:         []string{"/bin/sh", "-c", "sleep infinity"},
+					Command:         []string{"/bin/sh", "-c", "trap exit TERM; sleep infinity & wait"},
 				},
 			},
 		},
