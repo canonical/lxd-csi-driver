@@ -361,7 +361,7 @@ func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *c
 	}
 
 	unlock := locking.TryLock(req.VolumeId)
-	if err != nil {
+	if unlock == nil {
 		return nil, status.Errorf(codes.Aborted, "ControllerUnpublishVolume: Failed to obtain lock %q", req.VolumeId)
 	}
 
