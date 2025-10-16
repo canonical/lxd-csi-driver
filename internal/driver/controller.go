@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -45,15 +44,11 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: %v", err)
 	}
 
-	// Generate a unique volume name using a UUIDv7 (time-based UUID).
-	// UUID v7 is lexicographically sortable, which ensures that volumes
-	// are attached to the LXD instance in the order they were created.
-	uuid, err := uuid.NewV7()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to generate volume name: %v", err)
+	volName := req.Name
+	if c.driver.volumeNamePrefix != "" {
+		volName = c.driver.volumeNamePrefix + "-" + strings.TrimPrefix(volName, "pvc-")
 	}
 
-	volName := c.driver.volumeNamePrefix + "-" + uuid.String()
 	contentSource := req.VolumeContentSource
 
 	err = ValidateVolumeCapabilities(req.VolumeCapabilities...)
