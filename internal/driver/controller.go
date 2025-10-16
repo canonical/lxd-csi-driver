@@ -173,9 +173,9 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	volumeID := getVolumeID(target, poolName, volName)
 
-	unlock, err := locking.Lock(ctx, volumeID)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to obtain lock %q: %v", volumeID, err)
+	unlock := locking.TryLock(volumeID)
+	if unlock == nil {
+		return nil, status.Errorf(codes.Aborted, "CreateVolume: Failed to obtain lock %q", volumeID)
 	}
 
 	defer unlock()
@@ -257,9 +257,9 @@ func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 		client = client.UseTarget(target)
 	}
 
-	unlock, err := locking.Lock(ctx, req.VolumeId)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "DeleteVolume: Failed to obtain lock %q: %v", req.VolumeId, err)
+	unlock := locking.TryLock(req.VolumeId)
+	if unlock == nil {
+		return nil, status.Errorf(codes.Aborted, "DeleteVolume: Failed to obtain lock %q", req.VolumeId)
 	}
 
 	defer unlock()
@@ -297,9 +297,9 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 		return nil, status.Error(codes.InvalidArgument, "ControllerPublishVolume: Volume capability must specify either block or filesystem access type")
 	}
 
-	unlock, err := locking.Lock(ctx, req.VolumeId)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: Failed to obtain lock %q: %v", req.VolumeId, err)
+	unlock := locking.TryLock(req.VolumeId)
+	if unlock == nil {
+		return nil, status.Errorf(codes.Aborted, "ControllerPublishVolume: Failed to obtain lock %q", req.VolumeId)
 	}
 
 	defer unlock()
@@ -365,9 +365,9 @@ func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *c
 		return nil, status.Errorf(codes.InvalidArgument, "ControllerUnpublishVolume: %v", err)
 	}
 
-	unlock, err := locking.Lock(ctx, req.VolumeId)
+	unlock := locking.TryLock(req.VolumeId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ControllerUnpublishVolume: Failed to obtain lock %q: %v", req.VolumeId, err)
+		return nil, status.Errorf(codes.Aborted, "ControllerUnpublishVolume: Failed to obtain lock %q", req.VolumeId)
 	}
 
 	defer unlock()
