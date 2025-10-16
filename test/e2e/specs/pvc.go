@@ -15,6 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
+
+	"github.com/canonical/lxd-csi-driver/test/testutils"
 )
 
 // PersistentVolumeClaim represents a Kubernetes PersistentVolumeClaim.
@@ -32,7 +34,7 @@ type PersistentVolumeClaim struct {
 func NewPersistentVolumeClaim(client *kubernetes.Clientset, name string, namespace string) PersistentVolumeClaim {
 	manifest := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      generateName(name),
+			Name:      testutils.GenerateName(name),
 			Namespace: namespace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{

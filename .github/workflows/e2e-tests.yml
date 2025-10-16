@@ -23,6 +23,14 @@ jobs:
   e2e-tests:
     runs-on: ubuntu-24.04
     if: ${{ github.event_name != 'schedule' || github.repository == 'canonical/lxd-csi-driver' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        storage_driver:
+          - dir
+          - btrfs
+          - zfs
+          - lvm
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -75,9 +83,9 @@ jobs:
 
       - name: Run E2E tests
         env:
-          LXD_STORAGE_POOL: "${{ env.K8S_CLUSTER_NAME }}-storage-pool"
+          TEST_LXD_STORAGE_DRIVERS: "${{ matrix.storage_driver }}"
         run: |
           set -e
           cd test/e2e
           go install github.com/onsi/ginkgo/v2/ginkgo@v2.26.0
-          ginkgo -v --timeout 30m .
+          ginkgo -v --timeout 60m .

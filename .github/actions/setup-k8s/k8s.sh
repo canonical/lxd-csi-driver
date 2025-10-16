@@ -141,7 +141,7 @@ lxdNetworkCreate() {
     local network="${LXD_NETWORK_NAME}"
 
     echo "===> Creating LXD network ${network} ..."
-    lxc network create "${network}"
+    lxc network create "${network}" ipv4.address=172.16.17.1/24 ipv4.nat=true
 }
 
 lxdStorageCreate() {
