@@ -311,12 +311,12 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 			return nil, status.Errorf(codes.NotFound, "ControllerPublishVolume: Volume %q not found in storage pool %q", volName, poolName)
 		}
 
-		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: Failed to retrieve volume %q from storage pool %q: %v", volName, poolName, err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "ControllerPublishVolume: Failed to retrieve volume %q from storage pool %q: %v", volName, poolName, err)
 	}
 
 	inst, etag, err := client.GetInstance(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ControllerPublishVolume: %v", err)
+		return nil, status.Errorf(errors.ToGRPCCode(err), "ControllerPublishVolume: %v", err)
 	}
 
 	dev, ok := inst.Devices[volName]
