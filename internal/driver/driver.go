@@ -39,7 +39,7 @@ const (
 
 	// DefaultVolumeNamePrefix is the default prefix used for LXD volume names.
 	// Volume names are in format "<prefix>-<uuid>".
-	DefaultVolumeNamePrefix = "lxd-csi"
+	DefaultVolumeNamePrefix = "csi"
 
 	// DefaultDevLXDEndpoint is the default unix socket path for connecting to DevLXD.
 	DefaultDevLXDEndpoint = "unix:///dev/lxd/sock"
