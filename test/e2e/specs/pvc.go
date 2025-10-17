@@ -141,13 +141,27 @@ func (pvc PersistentVolumeClaim) Create(ctx context.Context) {
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create PVC %q", pvc.PrettyName())
 }
 
-// Patch updates the PersistentVolumeClaim in the Kubernetes cluster.
-func (pvc *PersistentVolumeClaim) Patch(ctx context.Context) {
+// patch updates the PersistentVolumeClaim in the Kubernetes cluster.
+func (pvc *PersistentVolumeClaim) patch(ctx context.Context) error {
 	ginkgo.By("Update PersistentVolumeClaim " + pvc.PrettyName())
 	bytes, err := json.Marshal(pvc.PersistentVolumeClaim)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to marshal PVC %q into JSON", pvc.PrettyName())
 	_, err = pvc.client.CoreV1().PersistentVolumeClaims(pvc.Namespace).Patch(ctx, pvc.Name, types.StrategicMergePatchType, bytes, metav1.PatchOptions{})
+	return err
+}
+
+// Patch updates the PersistentVolumeClaim in the Kubernetes cluster.
+func (pvc *PersistentVolumeClaim) Patch(ctx context.Context) {
+	err := pvc.patch(ctx)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to patch PVC %q\n%s", pvc.PrettyName(), pvc.StateString(ctx))
+}
+
+// PatchWithError updates the PersistentVolumeClaim in the Kubernetes cluster
+// and expects an error to be returned.
+func (pvc *PersistentVolumeClaim) PatchWithError(ctx context.Context, errMsgSubstring string) {
+	err := pvc.patch(ctx)
+	gomega.Expect(err).To(gomega.HaveOccurred(), "Expected an error patching PVC %q, but got none\n%s", pvc.PrettyName(), pvc.StateString(ctx))
+	gomega.Expect(err).To(gomega.ContainSubstring(errMsgSubstring), "Unexpected error while patching PVC %q: Expected %q, got %q", pvc.PrettyName(), errMsgSubstring, err.Error())
 }
 
 // delete deletes the PersistentVolumeClaim from the Kubernetes cluster.
@@ -201,16 +215,26 @@ func (pvc PersistentVolumeClaim) WaitBound(ctx context.Context) {
 	gomega.Eventually(pvcPhase).WithContext(ctx).Should(gomega.Equal(corev1.ClaimBound), "PVC %q is not bound\n%s", pvc.PrettyName(), pvc.StateString(ctx))
 }
 
-// WaitSize waits until the PersistentVolumeClaim is resized to desired size.
-func (pvc PersistentVolumeClaim) WaitSize(ctx context.Context, size string) {
-	ginkgo.By("Wait size of PersistentVolumeClaim " + pvc.PrettyName() + " to be " + size)
+// WaitResize waits until the PersistentVolumeClaim is resized.
+// It fetches the requested size and wait until PVC capacity matches it.
+func (pvc PersistentVolumeClaim) WaitResize(ctx context.Context) {
+	state, err := pvc.State(ctx)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get state of PVC %q\n%s", pvc.PrettyName(), pvc.StateString(ctx))
+
+	expectSize, ok := state.Spec.Resources.Requests[corev1.ResourceStorage]
+	if !ok {
+		gomega.Expect(ok).To(gomega.BeTrue(), "PVC %q does not have a size request\n%s", pvc.PrettyName(), pvc.StateString(ctx))
+		return
+	}
+
+	ginkgo.By("Wait size of PersistentVolumeClaim " + pvc.PrettyName() + " to be " + expectSize.String())
 	pvcSize := func(ctx context.Context) string {
 		state, err := pvc.State(ctx)
 		if err != nil {
 			return ""
 		}
 
-		v, ok := state.Spec.Resources.Requests[corev1.ResourceStorage]
+		v, ok := state.Status.Capacity[corev1.ResourceStorage]
 		if !ok {
 			return ""
 		}
@@ -218,7 +242,28 @@ func (pvc PersistentVolumeClaim) WaitSize(ctx context.Context, size string) {
 		return v.String()
 	}
 
-	gomega.Eventually(pvcSize).WithContext(ctx).Should(gomega.Equal(size), "PVC %q size is not %q\n%s", pvc.PrettyName(), size, pvc.StateString(ctx))
+	gomega.Eventually(pvcSize).WithContext(ctx).Should(gomega.Equal(expectSize.String()), "PVC %q size is not %q\n%s", pvc.PrettyName(), expectSize, pvc.StateString(ctx))
+}
+
+// WaitCondition waits until the PersistentVolumeClaim has the specified condition type and status.
+func (pvc PersistentVolumeClaim) WaitCondition(ctx context.Context, conditionType corev1.PersistentVolumeClaimConditionType, conditionStatus corev1.ConditionStatus) {
+	ginkgo.By("Wait size of PersistentVolumeClaim " + pvc.PrettyName() + " condition " + string(conditionType) + "=" + string(conditionStatus))
+	isCondMet := func(ctx context.Context) bool {
+		state, err := pvc.State(ctx)
+		if err != nil {
+			return false
+		}
+
+		for _, cond := range state.Status.Conditions {
+			if cond.Type == conditionType && cond.Status == conditionStatus {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	gomega.Eventually(isCondMet).WithContext(ctx).Should(gomega.BeTrue(), "PVC %q condition %q did not reach %q\n%s", pvc.PrettyName(), conditionType, conditionStatus, pvc.StateString(ctx))
 }
 
 // WaitGone waits until the PVC is no longer present in the Kubernetes cluster.
