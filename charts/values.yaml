@@ -280,6 +280,9 @@ storageClasses:
     # desirable if using local storage pools.
     volumeBindingMode: WaitForFirstConsumer
 
+    # -- (bool) Whether to allow volume expansion.
+    allowVolumeExpansion: true
+
     # -- (string) Reclaim policy for the volume.
     # Possible values are "Retain" and "Delete" (default).
     reclaimPolicy: Delete
