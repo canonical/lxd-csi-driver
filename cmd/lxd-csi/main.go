@@ -14,6 +14,7 @@ var (
 	devLXDEndpoint   = flag.String("devlxd-endpoint", driver.DefaultDevLXDEndpoint, "Devlxd endpoint (devlxd unix socket path)")
 	volumeNamePrefix = flag.String("volume-name-prefix", driver.DefaultVolumeNamePrefix, "Prefix used for LXD volume names")
 	nodeID           = flag.String("node-id", "", "Kubernetes node ID")
+	isController     = flag.Bool("controller", false, "Start LXD CSI driver controller server")
 )
 
 func run() error {
@@ -26,6 +27,7 @@ func run() error {
 		DevLXDEndpoint:   *devLXDEndpoint,
 		VolumeNamePrefix: *volumeNamePrefix,
 		NodeID:           *nodeID,
+		IsController:     *isController,
 	}
 
 	return driver.NewDriver(opts).Run()
