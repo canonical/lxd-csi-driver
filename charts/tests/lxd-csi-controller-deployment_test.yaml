@@ -46,7 +46,7 @@ tests:
           path: spec.template.spec.containers[*].resources
       - lengthEqual:
           path: spec.template.spec.containers
-          count: 4
+          count: 5
 
   - it: Expect custom replica count and update strategy when configured
     set:
@@ -142,6 +142,12 @@ tests:
           resources:
             requests:
               memory: 64Mi
+        csiResizer:
+          resources:
+            limits:
+              cpu: 200m
+            requests:
+              cpu: 50m
         csiLivenessProbe:
           resources:
             limits:
@@ -168,6 +174,13 @@ tests:
           value:
             requests:
               memory: 64Mi
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="csi-resizer")].resources
+          value:
+            limits:
+              cpu: 200m
+            requests:
+              cpu: 50m
       - equal:
           path: spec.template.spec.containers[?(@.name=="csi-liveness-probe")].resources
           value:
