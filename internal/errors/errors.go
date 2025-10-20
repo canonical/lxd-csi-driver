@@ -30,7 +30,13 @@ func ToGRPCCode(err error) codes.Code {
 	case api.StatusErrorCheck(err, http.StatusConflict): // 409
 		return codes.AlreadyExists
 	case api.StatusErrorCheck(err, http.StatusPreconditionFailed): // 412
-		return codes.FailedPrecondition
+		// The [http.StatusPreconditionFailed] is returned by LXD on an ETag mismatch.
+		// In the LXD CSI driver, this typically occurs when multiple volumes are
+		// attached or detached concurrently on the same instance (instance ETag changes).
+		// Returning [codes.FailedPrecondition] would stop Kubernetes from retrying,
+		// so return [codes.Unavailable] instead to trigger a retry, which should
+		// succeed on the next attempt.
+		return codes.Unavailable
 	case errors.Is(err, context.DeadlineExceeded):
 		return codes.DeadlineExceeded
 	case errors.Is(err, context.Canceled):
