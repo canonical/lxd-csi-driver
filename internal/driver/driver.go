@@ -97,15 +97,19 @@ type DriverOptions struct {
 
 	// ID of the node where the driver is running.
 	NodeID string
+
+	// IsController indicates whether to start controller server.
+	IsController bool
 }
 
 // Driver represents a CSI driver for LXD.
 type Driver struct {
 	// General driver information.
-	name     string
-	version  string
-	endpoint string
-	nodeID   string
+	name         string
+	version      string
+	endpoint     string
+	nodeID       string
+	isController bool
 
 	// Capabilities.
 	controllerCapabilities []*csi.ControllerServiceCapability
@@ -145,6 +149,7 @@ func NewDriver(opts DriverOptions) *Driver {
 		devLXDTokenFile:  DefaultDevLXDTokenFile,
 		volumeNamePrefix: opts.VolumeNamePrefix,
 		nodeID:           opts.NodeID,
+		isController:     opts.IsController,
 	}
 
 	d.SetControllerServiceCapabilities(
