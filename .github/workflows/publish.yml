@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
 
 permissions:
   contents: read
@@ -17,6 +19,7 @@ defaults:
 
 env:
   CONTAINER_REGISTRY: ghcr.io
+  VERSION: ${{ github.ref_name == 'main' && 'latest-edge' || github.ref_name }}
 
 jobs:
   tests:
@@ -30,11 +33,27 @@ jobs:
   publish:
     runs-on: ubuntu-24.04
     needs: e2e-tests
-    if: ${{ github.repository == 'canonical/lxd-csi-driver' && github.ref_name == 'main' }}
+    if: ${{ github.repository == 'canonical/lxd-csi-driver' }}
     permissions:
       contents: read
       packages: write
     steps:
+      - name: Validate release version
+        shell: bash
+        run: |
+          set -e
+          isSemver=false
+          if [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            isSemver=true
+          fi
+
+          if [[ "${VERSION}" != "latest-edge" && "${isSemver}" != "true" ]]; then
+            echo "Error: Invalid version '${VERSION}'. It must be either 'latest-edge' or a semantic version prefixed with 'v' (e.g., v1.2.3)."
+            exit 1
+          fi
+
+          echo "IS_SEMVER=${isSemver}" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
@@ -74,6 +93,12 @@ jobs:
       - name: Publish new Chart
         run: |
           set -e
-          chartVersion="v0.0.0-latest-edge"
-          helm package charts --version "${chartVersion}" --app-version "latest-edge"
+          chartVersion="${{ env.VERSION }}"
+
+          if [ "${{ env.IS_SEMVER }}" != "true" ]; then
+            # Prepend "v0.0.0-" to the version to satisfy Helm versioning requirements.
+            chartVersion="v0.0.0-${chartVersion}"
+          fi
+
+          helm package charts --version "${chartVersion}" --app-version "${{ env.VERSION }}"
           helm push "lxd-csi-driver-${chartVersion}.tgz" "oci://${{ env.CONTAINER_REGISTRY }}/${{ github.repository_owner }}/charts"
