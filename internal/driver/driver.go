@@ -152,11 +152,6 @@ func NewDriver(opts DriverOptions) *Driver {
 		isController:     opts.IsController,
 	}
 
-	d.SetControllerServiceCapabilities(
-		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
-		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
-	)
-
 	return d
 }
 
@@ -286,8 +281,17 @@ func (d *Driver) Run() error {
 
 	// Register CSI services.
 	csi.RegisterIdentityServer(d.server, NewIdentityServer(d))
-	csi.RegisterControllerServer(d.server, NewControllerServer(d))
-	csi.RegisterNodeServer(d.server, NewNodeServer(d))
+
+	if d.isController {
+		d.SetControllerServiceCapabilities(
+			csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+			csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
+		)
+
+		csi.RegisterControllerServer(d.server, NewControllerServer(d))
+	} else {
+		csi.RegisterNodeServer(d.server, NewNodeServer(d))
+	}
 
 	// Start gRPC server.
 	klog.InfoS("Listening for connections", "endpoint", url.String())
