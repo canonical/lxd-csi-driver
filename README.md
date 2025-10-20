@@ -1,45 +1,42 @@
 # LXD CSI driver for Kubernetes
 
-This repository contains a CSI driver for LXD.
+The LXD CSI driver is an open source implementation of the Container Storage Interface (CSI) that integrates LXD storage backends with Kubernetes. It allows dynamic storage volume provisioning using storage drivers supported by LXD.
 
 > [!WARNING]
 > The LXD CSI driver is still in the early stages, and backwards compatibility is not guaranteed.
 
+## Documentation
+
+The LXD CSI driver is documented as part of the official LXD documentation.
+
+Relevant sections include:
++ An overview of the [LXD CSI driver architecture and lifecycle](https://documentation.ubuntu.com/lxd/latest/explanation/csi/)
++ Instructions on how to [install and use the LXD CSI driver](https://documentation.ubuntu.com/lxd/latest/howto/storage_csi/)
++ The [reference documentation](https://documentation.ubuntu.com/lxd/latest/reference/driver_csi/) for the LXD CSI driver CLI and Helm chart
+
 ## Quick start
 
-This guide demonstrates how to get the LXD CSI driver running in your Kubernetes cluster.
+This guide explains how to deploy the LXD CSI driver in your Kubernetes cluster.
 
-### Requirements
+> [!IMPORTANT]
+> If you’re installing the LXD CSI driver for the first time, we recommend first reviewing the [LXD CSI driver explanation](https://documentation.ubuntu.com/lxd/latest/explanation/csi/) to understand its functionality, and then following the [installation and usage guide](https://documentation.ubuntu.com/lxd/latest/howto/storage_csi/).
+
+### Prerequisites
 
 You need a Kubernetes cluster (of any size) that is running on LXD instances within a dedicated LXD project.
 This guide assumes the LXD project is named `lxd-csi-project`.
-It also assumes you have admin permissions in the Kubernetes cluster.
 
 ### Authorization
 
-By default, DevLXD is not allowed to manage storage volumes or attach them to instances.
-You must enable this by setting `security.devlxd.management.volumes` to `true` on all LXD instances
-where CSI will be running.
-
-For example, to enable DevLXD volume management on instance `node-1`, run:
+Enable DevLXD volume management on all LXD instances where CSI will be running:
 ```sh
-lxc config set node-1 --project lxd-csi-project security.devlxd.management.volumes=true
+lxc config set <instance> --project lxd-csi-project security.devlxd.management.volumes=true
 ```
-
-You can also use an LXD profile to apply this setting to multiple instances at once.
 
 > [!NOTE]
 > LXD CSI is limited to Kubernetes clusters that are running within a single LXD project.
 
-At this point, DevLXD is allowed to access the LXD endpoint for volume management, but CSI still needs to prove it is authorized to perform such actions.
-We will create a DevLXD identity with sufficient permissions and issue a bearer token for it.
-
-The identity must have permissions in the project where the Kubernetes nodes are running to:
-- view the project,
-- manage (view, create, edit, delete) storage volumes,
-- edit instances.
-
-First, create a new authorization group `csi-group` with the required permissions:
+Create a new authorization group `csi-group` with the permissions to view the project, manage storage volumes, and edit instances:
 ```sh
 lxc auth group create csi-group
 lxc auth group permission add csi-group project lxd-csi-project can_view
@@ -72,13 +69,13 @@ kubectl create secret generic lxd-csi-secret \
     --from-literal=token="${token}"
 ```
 
-Deploy LXD CSI controller and node servers from manifests in [deploy](/deploy/) directory.
+Deploy LXD CSI driver using Helm:
 ```sh
-kubectl apply -f deploy/
+helm install lxd-csi-driver oci://ghcr.io/canonical/charts/lxd-csi-driver \
+  --version v0.0.0-latest-edge \
+  --namespace lxd-csi
 ```
 
 ### Using CSI driver
 
-To use the CSI driver, create a Kubernetes StorageClass that points to the LXD storage pool you want to manage.
-
-You can take the inspiration from an example in [example](/example/) directory.
+To use the CSI driver, create a Kubernetes StorageClass that points to the LXD storage pool you want to manage. See [LXD CSI driver usage examples](https://documentation.ubuntu.com/lxd/latest/howto/storage_csi/#usage-examples) in the LXD documentation.
