@@ -155,6 +155,11 @@ func NewDriver(opts DriverOptions) *Driver {
 	return d
 }
 
+// Version returns the driver version.
+func (d *Driver) Version() string {
+	return d.version
+}
+
 // Validate checks whether the driver configuration is valid.
 func (d *Driver) Validate() error {
 	// Validate volume name prefix.
