@@ -1,11 +1,11 @@
 REGISTRY=ghcr.io
 IMAGE=canonical/lxd-csi-driver
 # Use latest-edge for development builds to match what is in deploy/* manifests.
-VERSION=latest-edge
+VERSION?=latest-edge
 
 build:
 	@echo "> Building LXD CSI ...";
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -trimpath -o lxd-csi ./cmd/lxd-csi
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X github.com/canonical/lxd-csi-driver/internal/driver.driverVersion=${VERSION}" -trimpath -o lxd-csi ./cmd/lxd-csi
 
 image-build: build
 	@echo "> Building image $(REGISTRY)/$(IMAGE):$(VERSION) ...";
