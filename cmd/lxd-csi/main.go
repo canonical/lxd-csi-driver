@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 
 	"k8s.io/klog/v2"
 
@@ -15,22 +16,28 @@ var (
 	volumeNamePrefix = flag.String("volume-name-prefix", driver.DefaultVolumeNamePrefix, "Prefix used for LXD volume names")
 	nodeID           = flag.String("node-id", "", "Kubernetes node ID")
 	isController     = flag.Bool("controller", false, "Start LXD CSI driver controller server")
+	showVersion      = flag.Bool("version", false, "Show driver version and exit")
 )
 
 func run() error {
 	klog.InitFlags(nil)
 	flag.Parse()
 
-	opts := driver.DriverOptions{
+	d := driver.NewDriver(driver.DriverOptions{
 		Name:             *driverName,
 		Endpoint:         *endpoint,
 		DevLXDEndpoint:   *devLXDEndpoint,
 		VolumeNamePrefix: *volumeNamePrefix,
 		NodeID:           *nodeID,
 		IsController:     *isController,
+	})
+
+	if *showVersion {
+		fmt.Println(d.Version())
+		return nil
 	}
 
-	return driver.NewDriver(opts).Run()
+	return d.Run()
 }
 
 func main() {
