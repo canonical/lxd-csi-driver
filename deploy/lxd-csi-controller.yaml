@@ -119,6 +119,7 @@ spec:
             - "--node-id=$(NODE_ID)"
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--devlxd-endpoint=$(DEVLXD_ENDPOINT)"
+            - "--controller"
           env:
             - name: NODE_ID
               valueFrom:

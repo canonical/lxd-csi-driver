@@ -97,15 +97,19 @@ type DriverOptions struct {
 
 	// ID of the node where the driver is running.
 	NodeID string
+
+	// IsController indicates whether to start controller server.
+	IsController bool
 }
 
 // Driver represents a CSI driver for LXD.
 type Driver struct {
 	// General driver information.
-	name     string
-	version  string
-	endpoint string
-	nodeID   string
+	name         string
+	version      string
+	endpoint     string
+	nodeID       string
+	isController bool
 
 	// Capabilities.
 	controllerCapabilities []*csi.ControllerServiceCapability
@@ -145,12 +149,8 @@ func NewDriver(opts DriverOptions) *Driver {
 		devLXDTokenFile:  DefaultDevLXDTokenFile,
 		volumeNamePrefix: opts.VolumeNamePrefix,
 		nodeID:           opts.NodeID,
+		isController:     opts.IsController,
 	}
-
-	d.SetControllerServiceCapabilities(
-		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
-		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
-	)
 
 	return d
 }
@@ -281,8 +281,17 @@ func (d *Driver) Run() error {
 
 	// Register CSI services.
 	csi.RegisterIdentityServer(d.server, NewIdentityServer(d))
-	csi.RegisterControllerServer(d.server, NewControllerServer(d))
-	csi.RegisterNodeServer(d.server, NewNodeServer(d))
+
+	if d.isController {
+		d.SetControllerServiceCapabilities(
+			csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+			csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
+		)
+
+		csi.RegisterControllerServer(d.server, NewControllerServer(d))
+	} else {
+		csi.RegisterNodeServer(d.server, NewNodeServer(d))
+	}
 
 	// Start gRPC server.
 	klog.InfoS("Listening for connections", "endpoint", url.String())
