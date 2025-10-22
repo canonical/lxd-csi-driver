@@ -23,7 +23,7 @@ import (
 
 // driverVersion is the version of the CSI driver.
 // It is set during the build.
-const driverVersion = "dev"
+var driverVersion = "dev"
 
 // driverFileSystemMountPath is the path where the CSI driver mounts
 // the filesystem volumes.
@@ -153,6 +153,11 @@ func NewDriver(opts DriverOptions) *Driver {
 	}
 
 	return d
+}
+
+// Version returns the driver version.
+func (d *Driver) Version() string {
+	return d.version
 }
 
 // Validate checks whether the driver configuration is valid.
