@@ -136,6 +136,20 @@ controller:
       #   cpu: 10m
       #   memory: 64Mi
 
+  # -- CSI Resizer sidecar container configuration.
+  csiResizer:
+    image:
+      repository: registry.k8s.io/sig-storage/csi-resizer
+      tag: v1.14.0
+      pullPolicy: IfNotPresent
+    resources: {}
+      # limits:
+      #   cpu: 100m
+      #   memory: 256Mi
+      # requests:
+      #   cpu: 10m
+      #   memory: 64Mi
+
   # -- CSI liveness probe sidecar container configuration.
   csiLivenessProbe:
     image:
@@ -265,6 +279,9 @@ storageClasses:
     # on a different node than where the pod is scheduled. This may not be
     # desirable if using local storage pools.
     volumeBindingMode: WaitForFirstConsumer
+
+    # -- (bool) Whether to allow volume expansion.
+    allowVolumeExpansion: true
 
     # -- (string) Reclaim policy for the volume.
     # Possible values are "Retain" and "Delete" (default).

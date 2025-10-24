@@ -7,6 +7,7 @@ metadata:
 provisioner: lxd.csi.canonical.com
 reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
 parameters: {}
   # Specify the name of the LXD storage pool to use for provisioning volumes.
   #storagePool: "my-storage-pool"

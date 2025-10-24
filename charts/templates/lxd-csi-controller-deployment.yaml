@@ -199,6 +199,27 @@ spec:
           {{- with .Values.controller.csiAttacher.resources }}
           resources: {{ toYaml . | nindent 12 }}
           {{- end }}
+        - name: csi-resizer
+          image: {{ printf "%s:%s" .Values.controller.csiResizer.image.repository .Values.controller.csiResizer.image.tag }}
+          imagePullPolicy: {{ .Values.controller.csiResizer.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - --v=2
+            - --csi-address=$(CSI_ADDRESS)
+            - --timeout=1200s
+            - --leader-election
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          {{- with .Values.controller.csiResizer.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
         - name: csi-liveness-probe
           image: {{ printf "%s:%s" .Values.controller.csiLivenessProbe.image.repository .Values.controller.csiLivenessProbe.image.tag }}
           imagePullPolicy: {{ .Values.controller.csiLivenessProbe.image.pullPolicy }}
