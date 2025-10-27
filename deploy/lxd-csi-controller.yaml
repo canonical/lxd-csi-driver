@@ -96,6 +96,26 @@ spec:
             capabilities:
               drop:
                 - ALL
+        # Resizes volumes by calling ControllerExpandVolume functions of CSI driver
+        # when user requests more storage for a PVC.
+        - name: csi-resizer
+          image: registry.k8s.io/sig-storage/csi-resizer:v1.14.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - -v=2
+            - --csi-address=$(CSI_ADDRESS)
+            - --timeout=1200s
+            - --leader-election
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
         # Liveness probe for the CSI controller.
         - name: liveness-probe
           image: registry.k8s.io/sig-storage/livenessprobe:v2.17.0

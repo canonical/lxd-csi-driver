@@ -72,6 +72,12 @@ func (sc StorageClass) WithReclaimPolicy(mode corev1.PersistentVolumeReclaimPoli
 	return sc
 }
 
+// WithVolumeExpansion sets the allowVolumeExpansion field for the StorageClass.
+func (sc StorageClass) WithVolumeExpansion(allowVolumeExpansion bool) StorageClass {
+	sc.AllowVolumeExpansion = &allowVolumeExpansion
+	return sc
+}
+
 // WithDefault marks the storage class as default.
 func (sc StorageClass) WithDefault(isDefault bool) StorageClass {
 	if sc.Annotations == nil {

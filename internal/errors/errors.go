@@ -37,6 +37,17 @@ func ToGRPCCode(err error) codes.Code {
 		// so return [codes.Unavailable] instead to trigger a retry, which should
 		// succeed on the next attempt.
 		return codes.Unavailable
+	case api.StatusErrorCheck(err, http.StatusLocked): // 423
+		// The [http.StatusLocked] is returned by LXD when a resource (for example, a volume)
+		// is currently in use and cannot be modified.
+		// Returning [codes.FailedPrecondition] lets Kubernetes wait until the resource
+		// is no longer in use before retrying.
+		//
+		// For example, an online block volume expansion will fail with [http.StatusLocked].
+		// When Kubernetes received a [codes.FailedPrecondition], it will wait until the
+		// volume is released, and the error will indicate that the volume supports only
+		// offline expansion.
+		return codes.FailedPrecondition
 	case errors.Is(err, context.DeadlineExceeded):
 		return codes.DeadlineExceeded
 	case errors.Is(err, context.Canceled):
