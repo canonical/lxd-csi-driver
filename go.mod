@@ -6,7 +6,7 @@ require (
 	github.com/canonical/lxd v0.0.0-20250926100704-67c48a397530
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/onsi/ginkgo/v2 v2.26.0
+	github.com/onsi/ginkgo/v2 v2.27.1
 	github.com/onsi/gomega v1.38.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sys v0.37.0
