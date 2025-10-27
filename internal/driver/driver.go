@@ -295,6 +295,7 @@ func (d *Driver) Run() error {
 
 		csi.RegisterControllerServer(d.server, NewControllerServer(d))
 	} else {
+		d.SetNodeServiceCapabilities()
 		csi.RegisterNodeServer(d.server, NewNodeServer(d))
 	}
 
