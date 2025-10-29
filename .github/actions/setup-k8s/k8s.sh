@@ -3,6 +3,13 @@
 # This script deploys a Canonical Kubernetes in LXD virtual machines and
 # is intended purely for testing LXD CSI driver.
 #
+# If LXD is running in standalone mode (is not clustered), the script will
+# create a bridged network and a storage pool for the Kubernetes nodes.
+#
+# If LXD is clustered, the script will distribute the Kubernetes nodes
+# across the LXD cluster members. It will expect that a bridged network
+# named "br0" and storage pool name "default" already exist.
+#
 
 set -euo pipefail
 
@@ -127,6 +134,30 @@ jobWaitAll() {
     logs=()
 }
 
+members=$(lxc cluster ls --format csv | awk -F, '{print $1}' || echo "")
+memberCount=$(echo "${members}" | wc -l)
+
+# lxdFindMember returns the LXD cluster member name for the given index.
+# It uses modulo arithmetic to wrap around if the index exceeds the number of members.
+lxdFindMember() {
+    if [ -z "${members}" ]; then
+        echo ""
+        return 0
+    fi
+
+    # Trim non-numeric characters from input.
+    local value="${1}"
+    local index="${value//[^0-9]/}"
+
+    if [ -z "${index}" ] || [[ "${index}" -lt 1 ]]; then
+        echo "Error: lxdFindMember: Invalid input value '${value}' (index: '${index}'): Index must be a positive number" >&2
+        return 1
+    fi
+
+    local index=$(( ((index - 1) % memberCount) + 1))
+    echo "${members}" | sed -n "${index}p"
+}
+
 # lxdProjectCreate creates a new LXD project with the name specified in the environment variable LXD_PROJECT_NAME.
 lxdProjectCreate() {
     local project="${LXD_PROJECT_NAME}"
@@ -141,6 +172,17 @@ lxdNetworkCreate() {
     local network="${LXD_NETWORK_NAME}"
 
     echo "===> Creating LXD network ${network} ..."
+
+    if [ "${members}" != "" ]; then
+        echo "SKIP: Using bridged NIC instead of LXD managed network"
+        return 0
+    fi
+
+    if lxc network show "${network}" &>/dev/null; then
+        echo "SKIP: Network ${network} already exists"
+        return 0
+    fi
+
     lxc network create "${network}" ipv4.address=172.16.17.1/24 ipv4.nat=true
 }
 
@@ -149,8 +191,26 @@ lxdStorageCreate() {
     local size="${LXD_STORAGE_POOL_SIZE}"
     local driver="${LXD_STORAGE_POOL_DRIVER}"
 
+    if [ "${members}" != "" ]; then
+        echo "===> LXD is clustered: Using existing storage pool 'default' ..."
+        LXD_STORAGE_POOL_NAME="default"
+
+        if ! lxc storage show "${LXD_STORAGE_POOL_NAME}" &>/dev/null; then
+            echo "Error: When LXD is clustered, a storage pool 'default' is required to exist." >&2
+            exit 1
+        fi
+
+        LXD_STORAGE_POOL_DRIVER=$(lxc storage show "${LXD_STORAGE_POOL_NAME}" | awk '/driver/ {print $2}')
+        return 0
+    fi
+
+    if lxc storage show "${pool}" &>/dev/null; then
+        echo "SKIP: Storage pool ${pool} already exists"
+        return 0
+    fi
+
     local opts=()
-    if [ "${size}" != "" ]; then
+    if [ "${driver}" != "dir" ] && [ "${size}" != "" ]; then
         opts+=("size=${size}")
     fi
 
@@ -165,6 +225,9 @@ lxdInstanceCreate() {
     local project="${LXD_PROJECT_NAME}"
     local network="${LXD_NETWORK_NAME}"
     local storage="${LXD_STORAGE_POOL_NAME}"
+    local target
+
+    target="$(lxdFindMember "${instance}")"
 
     if [ -z "${instance}" ]; then
         echo "Usage: lxdInstanceCreate <instance>" >&2
@@ -176,17 +239,33 @@ lxdInstanceCreate() {
         opts+=(--vm)
     fi
 
+    if [ "${members}" = "" ]; then
+        # When LXD is not clustered, use created bridge network.
+        opts+=(--network "${network}")
+    fi
+
     # Create LXD virtual machine.
-    echo "===> Creating LXD instance ${instance} ..."
-    lxc launch "${image}" "${instance}" \
+    echo "===> Creating LXD instance ${instance} (target: ${target:-none})..."
+    lxc init "${image}" "${instance}" \
+        --no-profiles \
         --project "${project}" \
-        --network "${network}" \
         --storage "${storage}" \
         --config limits.cpu=4 \
         --config limits.memory=4GB \
-        --device root,size=16GiB \
         --config security.devlxd.management.volumes=true \
+        --device root,size=16GiB \
+        --target "${target}" \
         "${opts[@]}"
+
+    if [ "${members}" != "" ]; then
+        # When LXD is clustered, expect network bridge named "br0" to exist.
+        lxc config device add "${instance}" eth0 nic \
+            nictype=bridged \
+            parent=br0 \
+            --project "${project}"
+    fi
+
+    lxc start "${instance}" --project "${project}"
 }
 
 # lxdInstanceIP retrieves the IP address of the specified LXD instance.
@@ -257,7 +336,6 @@ k8sSetupNode() {
         return 1
     fi
 
-    lxdInstanceCreate "${instance}"
     waitInstanceReady "${instance}"
     k8sInstall "${instance}"
 }
@@ -460,6 +538,7 @@ installLXDCSIDriver() {
         --namespace lxd-csi \
         --timeout 120s \
         --wait \
+        --debug \
         --set driver.image.tag="${K8S_CSI_IMAGE_TAG}" \
         --set snapshotter.enabled=true
 }
@@ -494,6 +573,11 @@ case "${cmd}" in
         # Create LXD instances for Kubernetes nodes.
         for i in $(seq 1 "${K8S_NODE_COUNT}"); do
             instance="${K8S_CLUSTER_NAME}-node-${i}"
+
+            # Create an instance before configuring the node in the background process.
+            # This prevents conflicts with image download when LXD is clustered.
+            lxdInstanceCreate "${instance}"
+
             jobRun \
                 "Setup node ${instance}" \
                 k8sSetupNode "${instance}"
