@@ -96,8 +96,8 @@ jobs:
           chartVersion="${{ env.VERSION }}"
 
           if [ "${{ env.IS_SEMVER }}" != "true" ]; then
-            # Prepend "v0.0.0-" to the version to satisfy Helm versioning requirements.
-            chartVersion="v0.0.0-${chartVersion}"
+            # Prepend "v0-" to the version to satisfy Helm versioning requirements.
+            chartVersion="v0-${chartVersion}"
           fi
 
           helm package charts --version "${chartVersion}" --app-version "${{ env.VERSION }}"
