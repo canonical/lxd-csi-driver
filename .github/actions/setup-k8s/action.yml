@@ -18,6 +18,14 @@ inputs:
     description: Path where Kubeconfig file will be stored
     default: "/home/runner/.kube/config"
     type: string
+  k8s-csi-image-tag:
+    description: Tag of the LXD CSI driver image to deploy to the cluster
+    default: ""
+    type: string
+  k8s-csi-image-path:
+    description: Path to the LXD CSI driver image tarball to import to cluster nodes (empty to skip)
+    default: ""
+    type: string
 
 runs:
   using: composite
@@ -29,6 +37,7 @@ runs:
         K8S_NODE_COUNT: ${{ inputs.k8s-node-count }}
         K8S_SNAP_CHANNEL: ${{ inputs.k8s-snap-channel }}
         K8S_KUBECONFIG_PATH: ${{ inputs.k8s-kubeconfig-path }}
-        K8S_CSI_IMAGE_PATH: lxd-csi-driver.tar
+        K8S_CSI_IMAGE_PATH: ${{ inputs.k8s-csi-image-path }}
+        K8S_CSI_IMAGE_TAG: ${{ inputs.k8s-csi-image-tag }}
       run: |
         ${{ github.action_path }}/k8s.sh deploy
