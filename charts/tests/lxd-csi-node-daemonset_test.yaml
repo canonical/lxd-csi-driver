@@ -174,7 +174,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[?(@.name=="lxd-csi-node")].image
-          value: ghcr.io/canonical/lxd-csi-driver:latest-edge
+          value: ghcr.io/canonical/lxd-csi-driver:dev
 
   - it: Expect namespace when Chart's release namespace is configured
     release:
