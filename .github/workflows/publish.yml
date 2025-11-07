@@ -1,10 +1,8 @@
-name: Publish CSI image
+name: Release CSI image
 on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
 
 permissions:
   contents: read
@@ -22,38 +20,89 @@ env:
   VERSION: ${{ github.ref_name == 'main' && 'latest-edge' || github.ref_name }}
 
 jobs:
-  tests:
-    uses: ./.github/workflows/tests.yml
-
-  e2e-tests:
-    needs: tests
-    uses: ./.github/workflows/e2e-tests.yml
-
-  # Publish container image to GHCR if tests passed and we are on main branch.
-  publish:
+  # Precheck job checks whether the CSI image (and Helm chart) publishing is required, and
+  # whether a new GitHub release should be created.
+  # The image/chart are published as "latest-edge" on each push to main branch.
+  # If the GitHub release matching the version in "VERSION" file does not exist yet,
+  # a new release is created.
+  precheck:
     runs-on: ubuntu-24.04
-    needs: e2e-tests
-    if: ${{ github.repository == 'canonical/lxd-csi-driver' }}
-    permissions:
-      contents: read
-      packages: write
+    outputs:
+      versions: ${{ steps.read.outputs.versions }}
+      release: ${{ steps.read.outputs.release }}
     steps:
-      - name: Validate release version
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Determine versions to be published
+        id: read
         shell: bash
+        env:
+          # Set GH_TOKEN to authenticate "gh" CLI.
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          isSemver=false
-          if [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            isSemver=true
+          release=""   # GitHub release name.
+          versions=""  # CSI image and chart tags.
+
+          # Latest release only on the main branch.
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            versions="${versions} latest-edge"
           fi
 
-          if [[ "${VERSION}" != "latest-edge" && "${isSemver}" != "true" ]]; then
-            echo "Error: Invalid version '${VERSION}'. It must be either 'latest-edge' or a semantic version prefixed with 'v' (e.g., v1.2.3)."
+          # Read and validate current version.
+          version=$(cat VERSION)
+          if [[ ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Invalid version '${version}' in VERSION file. It must be a semantic version prefixed with 'v'."
             exit 1
           fi
 
-          echo "IS_SEMVER=${isSemver}" >> "$GITHUB_ENV"
+          # Check if the version already exists.
+          # If it does not exist, add versions that need to be published to the list.
+          foundRelease=$(gh release list -R ${{ github.repository }} --json tagName --jq ".[] | select(.tagName == \"${version}\").tagName")
+          if [ "${foundRelease}" = "" ]; then
+            release="${version}"
+            versions="${versions} ${version}"      # Example: v1.2.3
+            versions="${versions} ${version%.*}"   # Example: v1.2
+            versions="${versions} ${version%%.*}"  # Example: v1
+          fi
 
+          # Trim potential surrounding whitespace.
+          versions=$(echo "$versions" | xargs)
+
+          # Output versions for publishing.
+          echo "versions=${versions}" >> "$GITHUB_OUTPUT"
+          echo "release=${release}" >> "$GITHUB_OUTPUT"
+
+      - name: Output versions
+        run: |
+          echo "Versions to be published: ${{ steps.read.outputs.versions }}"
+          echo "Release version: ${{ steps.read.outputs.release }}"
+
+  tests:
+    needs:
+      - precheck
+    permissions:
+      contents: read
+    uses: ./.github/workflows/tests.yml
+
+  e2e-tests:
+    uses: ./.github/workflows/e2e-tests.yml
+    needs:
+      - precheck
+      - tests
+
+  # Publish container image to GHCR if tests passed and we are on main branch.
+  publish:
+    if: ${{ github.repository == 'canonical/lxd-csi-driver' && needs.precheck.outputs.versions != '' }}
+    needs:
+      - precheck
+      - e2e-tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # Required for creating releases.
+      packages: write # Required for publishing to GHCR.
+    steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
@@ -62,10 +111,19 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Build image
+      - name: Build image and create image tags
+        id: image
         run: |
           set -e
           make build
+
+          tags=""
+          for version in ${{ needs.precheck.outputs.versions }}; do
+            tags=${tags},${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}:${version}
+          done
+
+          # Output tags with leading comma removed.
+          echo "tags=${tags#,}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the container registry
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
@@ -80,7 +138,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}:${{ env.VERSION }}
+          tags: ${{ steps.image.outputs.tags }}
 
       - name: Log in to the Helm registry
         run: |
@@ -93,12 +151,24 @@ jobs:
       - name: Publish new Chart
         run: |
           set -e
-          chartVersion="${{ env.VERSION }}"
+          for version in ${{ needs.precheck.outputs.versions }}; do
+            chartVersion="${version}"
 
-          if [ "${{ env.IS_SEMVER }}" != "true" ]; then
-            # Prepend "v0-" to the version to satisfy Helm versioning requirements.
-            chartVersion="v0-${chartVersion}"
-          fi
+            # If the version does not start with an integer (prefix 'v' is optional),
+            # we prefix Chart version with 'v0-' prefix to satisfy Helm chart version constraints.
+            if [[ ! "${version}" =~ ^v?[0-9] ]]; then
+              chartVersion="v0-${version}"
+            fi
 
-          helm package charts --version "${chartVersion}" --app-version "${{ env.VERSION }}"
-          helm push "lxd-csi-driver-${chartVersion}.tgz" "oci://${{ env.CONTAINER_REGISTRY }}/${{ github.repository_owner }}/charts"
+            helm package charts --version "${chartVersion}" --app-version "${version}"
+            helm push "lxd-csi-driver-${chartVersion}.tgz" "oci://${{ env.CONTAINER_REGISTRY }}/${{ github.repository_owner }}/charts"
+          done
+
+      - name: Make a release
+        uses: softprops/action-gh-release@v2
+        if: ${{ needs.precheck.outputs.release != '' }}
+        with:
+          name: ${{ needs.precheck.outputs.release }}
+          tag_name: ${{ needs.precheck.outputs.release }}
+          generate_release_notes: true
+          draft: false
