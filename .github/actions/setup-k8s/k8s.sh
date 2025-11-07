@@ -320,11 +320,25 @@ k8sWaitReady() {
         echo "Error: Kubernetes cluster is not ready after ${timeout} seconds!" >&2
     ' ERR
 
-    echo "===> Waiting for Kubernetes nodes to become ready ..."
-    kubectl --kubeconfig "${kubeconfigPath}" wait --for=condition=Ready nodes --all --timeout="${timeout}s"
+    local deadline=$((SECONDS + timeout))
+    local nodesReady=0
+    local podsReady=0
 
-    echo "===> Waiting for all system pods to become ready ..."
-    kubectl --kubeconfig "${kubeconfigPath}" wait --for=condition=Ready pods --all --all-namespaces --timeout="${timeout}s"
+    echo "===> Waiting for all Kubernetes nodes and pods to be ready ..."
+    while (( SECONDS < deadline )); do
+        [ "${nodesReady}" -eq 0 ] && kubectl --kubeconfig "${kubeconfigPath}" wait --for=condition=Ready nodes --all --timeout=30s && nodesReady=1
+        [ "${podsReady}" -eq 0 ] && kubectl --kubeconfig "${kubeconfigPath}" wait --for=condition=Ready pods  --all -A --timeout=30s && podsReady=1
+
+        if [ "${nodesReady}" -eq 1 ] && [ "${podsReady}" -eq 1 ]; then
+            break
+        fi
+
+        sleep 2
+    done
+
+    if (( SECONDS >= deadline )); then
+        return 1
+    fi
 
     trap - ERR
 }
