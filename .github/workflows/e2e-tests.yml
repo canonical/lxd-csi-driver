@@ -42,9 +42,11 @@ jobs:
 
       # Build the image before disabling Docker.
       - name: Build CSI driver image
+        id: image
         run: |
           set -e
           make image-export
+          echo "path=lxd-csi-driver.tar" >> "$GITHUB_OUTPUT"
 
       # Disable Docker to avoid conflicts with LXD.
       - name: Disable Docker
@@ -62,8 +64,9 @@ jobs:
           channel: latest/edge
 
       - name: Set Kubeconfig path
+        id: kubeconfig
         run: |
-          echo "K8S_KUBECONFIG_PATH=${HOME}/.kube/config" >> $GITHUB_ENV
+          echo "path=${HOME}/.kube/config" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Kubernetes cluster
         uses: ./.github/actions/setup-k8s
@@ -71,8 +74,8 @@ jobs:
           k8s-cluster-name: ${{ env.K8S_CLUSTER_NAME }}
           k8s-node-count: 2
           k8s-snap-channel: latest/edge
-          k8s-kubeconfig-path: ${{ env.K8S_KUBECONFIG_PATH }}
-          k8s-csi-image-path: lxd-csi-driver.tar
+          k8s-kubeconfig-path: ${{ steps.kubeconfig.outputs.path }}
+          k8s-csi-image-path: ${{ steps.image.outputs.path }}
           k8s-csi-image-tag: dev
 
       - name: Print cluster info
@@ -87,6 +90,7 @@ jobs:
       - name: Run E2E tests
         env:
           TEST_LXD_STORAGE_DRIVERS: "${{ matrix.storage_driver }}"
+          K8S_KUBECONFIG_PATH: ${{ steps.kubeconfig.outputs.path }}
         run: |
           set -e
           cd test/e2e
