@@ -40,6 +40,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      # Build the image before disabling Docker.
       - name: Build CSI driver image
         run: |
           set -e
@@ -71,6 +72,8 @@ jobs:
           k8s-node-count: 2
           k8s-snap-channel: latest/edge
           k8s-kubeconfig-path: ${{ env.K8S_KUBECONFIG_PATH }}
+          k8s-csi-image-path: lxd-csi-driver.tar
+          k8s-csi-image-tag: dev
 
       - name: Print cluster info
         run: |
