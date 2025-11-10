@@ -1,48 +1,31 @@
-# LXD CSI Helm Chart
+# LXD CSI Helm chart
 
 Helm chart for a LXD CSI Driver.
 
-## Prerequisites
+## Install local Helm chart
 
-The Helm chart requires an existing Kubernetes Secret containing a DevLXD bearer token. The Secret must include the token under the `token` key.
-By default, the chart expects the Secret to be named `lxd-csi-secret`, but this can be changed using the `driver.tokenSecretName` value.
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: lxd-csi-secret
-  namespace: lxd-csi # Secret must be in the same namespace as LXD CSI driver.
-type: Opaque
-stringData:
-  token: "<devlxd_token>"
-```
-
-## Installing the Chart
-
-Install the chart:
+Create the namespace and the secret containing DevLXD bearer token.
 ```sh
-helm install lxd-csi-driver oci://ghcr.io/canonical/charts/lxd-csi-driver \
-  --version v0.0.0-latest-edge \
-  --namespace lxd-csi \
-  --create-namespace \
-  -f values.yaml
+kubectl create namespace lxd-csi --save-config
+kubectl create secret generic lxd-csi-secret \
+    --namespace lxd-csi \
+    --from-literal=token="<DEVLXD_TOKEN>"
 ```
 
-Optionally, you can retrieve default chart [values](/values.yaml) and edit them:
+Package and install the chart:
 ```sh
-helm show values oci://ghcr.io/canonical/charts/lxd-csi-driver --version v0.0.0-latest-edge > values.yaml
+helm package . --app-version latest-edge
+helm install lxd-csi lxd-csi-driver-v0-dev.tgz --namespace lxd-csi --atomic
 ```
 
-> [!TIP]
-> Use `template` command instead of `install` to see the resulting manifests.
-
-## Uninstalling the Chart
+## Uninstall local Helm chart
 
 ```sh
-helm delete lxd-csi-driver --namespace lxd-csi
+helm delete lxd-csi --namespace lxd-csi
+kubectl delete namespace lxd-csi
 ```
 
-## Chart Unit Tests
+## Helm Chart unit tests
 
 Install Helm [`unittest`](https://github.com/helm-unittest/helm-unittest) plugin:
 ```sh
@@ -51,5 +34,5 @@ helm plugin install https://github.com/helm-unittest/helm-unittest.git
 
 Run unit tests:
 ```sh
-helm unittest charts/
+helm unittest .
 ```
