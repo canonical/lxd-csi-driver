@@ -72,7 +72,7 @@ kubectl create secret generic lxd-csi-secret \
 Deploy LXD CSI driver using Helm:
 ```sh
 helm install lxd-csi-driver oci://ghcr.io/canonical/charts/lxd-csi-driver \
-  --version v0.0.0-latest-edge \
+  --version v0 \
   --namespace lxd-csi
 ```
 
