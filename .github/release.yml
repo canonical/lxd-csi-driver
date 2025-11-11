@@ -1,0 +1,16 @@
+changelog:
+  categories:
+    - title: ⚠️ Breaking Changes ⚠️
+      labels:
+        - breaking-change
+    - title: Improvements
+      labels:
+        - "*"
+      # Ordering is important and dependency updates should not be at the top.
+      # Therefore, exclude dependency updates from this category.
+      exclude:
+        labels:
+          - dependencies
+    - title: Dependency Updates
+      labels:
+        - dependencies
