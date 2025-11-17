@@ -15,7 +15,7 @@ kubectl create secret generic lxd-csi-secret \
 Package and install the chart:
 ```sh
 helm package . --app-version latest-edge
-helm install lxd-csi lxd-csi-driver-v0-dev.tgz --namespace lxd-csi --atomic
+helm install lxd-csi lxd-csi-driver-v0-dev.tgz --namespace lxd-csi --rollback-on-failure
 ```
 
 ## Uninstall local Helm chart
