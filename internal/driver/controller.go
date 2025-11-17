@@ -458,7 +458,11 @@ func (c *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.
 		},
 	}
 
-	err = client.UpdateStoragePoolVolume(poolName, "custom", volName, volReq, etag)
+	op, err := client.UpdateStoragePoolVolume(poolName, "custom", volName, volReq, etag)
+	if err == nil {
+		err = op.WaitContext(ctx)
+	}
+
 	if err != nil {
 		return nil, status.Errorf(errors.ToGRPCCode(err), "ExpandVolume: Failed to expand volume: %v", err)
 	}
