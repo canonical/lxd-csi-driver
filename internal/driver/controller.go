@@ -217,7 +217,11 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		},
 	}
 
-	err = client.CreateStoragePoolVolume(poolName, poolReq)
+	op, err := client.CreateStoragePoolVolume(poolName, poolReq)
+	if err == nil {
+		err = op.WaitContext(ctx)
+	}
+
 	if err != nil {
 		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to create volume %q in storage pool %q: %v", volName, poolName, err)
 	}
