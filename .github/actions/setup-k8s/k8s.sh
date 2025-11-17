@@ -438,7 +438,7 @@ installLXDCSIDriver() {
         --kubeconfig "${kubeconfigPath}" \
         --namespace lxd-csi \
         --timeout 120s \
-        --atomic \
+        --rollback-on-failure \
         --wait \
         --set driver.image.tag="${K8S_CSI_IMAGE_TAG}"
 }
