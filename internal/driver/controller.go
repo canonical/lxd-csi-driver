@@ -266,7 +266,11 @@ func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 
 	// Delete storage volume. If volume does not exist, we consider
 	// the operation successful.
-	err = client.DeleteStoragePoolVolume(poolName, "custom", volName)
+	op, err := client.DeleteStoragePoolVolume(poolName, "custom", volName)
+	if err == nil {
+		err = op.WaitContext(ctx)
+	}
+
 	if err != nil && !api.StatusErrorCheck(err, http.StatusNotFound) {
 		return nil, status.Errorf(errors.ToGRPCCode(err), "DeleteVolume: Failed to delete volume %q from storage pool %q: %v", volName, poolName, err)
 	}
