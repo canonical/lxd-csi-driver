@@ -217,7 +217,11 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		},
 	}
 
-	err = client.CreateStoragePoolVolume(poolName, poolReq)
+	op, err := client.CreateStoragePoolVolume(poolName, poolReq)
+	if err == nil {
+		err = op.WaitContext(ctx)
+	}
+
 	if err != nil {
 		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to create volume %q in storage pool %q: %v", volName, poolName, err)
 	}
@@ -262,7 +266,11 @@ func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 
 	// Delete storage volume. If volume does not exist, we consider
 	// the operation successful.
-	err = client.DeleteStoragePoolVolume(poolName, "custom", volName)
+	op, err := client.DeleteStoragePoolVolume(poolName, "custom", volName)
+	if err == nil {
+		err = op.WaitContext(ctx)
+	}
+
 	if err != nil && !api.StatusErrorCheck(err, http.StatusNotFound) {
 		return nil, status.Errorf(errors.ToGRPCCode(err), "DeleteVolume: Failed to delete volume %q from storage pool %q: %v", volName, poolName, err)
 	}
@@ -454,7 +462,11 @@ func (c *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.
 		},
 	}
 
-	err = client.UpdateStoragePoolVolume(poolName, "custom", volName, volReq, etag)
+	op, err := client.UpdateStoragePoolVolume(poolName, "custom", volName, volReq, etag)
+	if err == nil {
+		err = op.WaitContext(ctx)
+	}
+
 	if err != nil {
 		return nil, status.Errorf(errors.ToGRPCCode(err), "ExpandVolume: Failed to expand volume: %v", err)
 	}
