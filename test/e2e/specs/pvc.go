@@ -86,6 +86,16 @@ func (pvc PersistentVolumeClaim) WithSize(size string) PersistentVolumeClaim {
 	return pvc
 }
 
+// WithSource sets the source of the PersistentVolumeClaim.
+func (pvc PersistentVolumeClaim) WithSource(pvcName string) PersistentVolumeClaim {
+	pvc.Spec.DataSource = &corev1.TypedLocalObjectReference{
+		Kind: "PersistentVolumeClaim",
+		Name: pvcName,
+	}
+
+	return pvc
+}
+
 // Events returns the events related to the PersistentVolumeClaim.
 func (pvc PersistentVolumeClaim) Events(ctx context.Context) (*corev1.EventList, error) {
 	return pvc.client.CoreV1().Events(pvc.Namespace).List(ctx, metav1.ListOptions{

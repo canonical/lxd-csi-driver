@@ -185,10 +185,6 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		return nil, status.Errorf(codes.AlreadyExists, "CreateVolume: Volume with the same name %q already exists", volName)
 	}
 
-	if contentSource != nil {
-		return nil, status.Error(codes.Unimplemented, "CreateVolume: Volume source is not supported yet")
-	}
-
 	// If PVC name was passed to the driver, use it as the volume description.
 	// Otherwise, use a generic description to clearly indicate the volume is managed by Kubernetes.
 	volumeDescription := "Managed by Kubernetes PVC"
@@ -204,26 +200,107 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		volumeDescription = volumeDescription + " " + pvcIdentifier
 	}
 
-	// Volume source content is not provided. Create a new volume.
-	poolReq := api.DevLXDStorageVolumesPost{
-		Name:        volName,
-		Type:        "custom", // Only custom volumes can be managed by the CSI.
-		ContentType: contentType,
-		DevLXDStorageVolumePut: api.DevLXDStorageVolumePut{
-			Description: volumeDescription,
-			Config: map[string]string{
-				"size": strconv.FormatInt(sizeBytes, 10),
+	if contentSource != nil {
+		var sourcePoolName string
+		var sourceVolName string
+		var sourceTarget string
+
+		switch contentSource.Type.(type) {
+		case *csi.VolumeContentSource_Snapshot:
+			return nil, status.Error(codes.Unimplemented, "CreateVolume: Using snapshot as volume source is not supported")
+		case *csi.VolumeContentSource_Volume:
+			sourceVolID := contentSource.GetVolume().VolumeId
+			sourceTarget, sourcePoolName, sourceVolName, err = splitVolumeID(sourceVolID)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: %v", err)
+			}
+
+			sourceClient := client
+			if c.driver.isClustered {
+				// Ensure source volume target is respected when LXD is clustered.
+				sourceClient = sourceClient.UseTarget(sourceTarget)
+			} else {
+				// Clear target for non-clustered LXD deployments.
+				sourceTarget = ""
+			}
+
+			// Fetch source volume.
+			sourceVol, _, err := sourceClient.GetStoragePoolVolume(sourcePoolName, "custom", sourceVolName)
+			if err != nil {
+				return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to retrieve source volume: %v", err)
+			}
+
+			// Check if the source volume matches the volume requirements.
+			if sourceVol.ContentType != contentType {
+				return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Content type %q of volume %q does not match the requested volume content type %q", sourceVol.ContentType, sourceVolName, contentType)
+			}
+
+			sourceVolSize := sourceVol.Config["size"]
+			if sourceVolSize == "" {
+				return nil, status.Errorf(codes.FailedPrecondition, "CreateVolume: Cannot determine size of the source volume %q: Size is not configured", sourceVolName)
+			}
+
+			sourceVolSizeBytes, err := strconv.ParseInt(sourceVolSize, 10, 64)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to parse size %q of the source volume %q: %v", sourceVolSize, sourceVolName, err)
+			}
+
+			if sourceVolSizeBytes > sizeBytes {
+				return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Source volume size %d is larger than the volume size %d", sourceVolSizeBytes, sizeBytes)
+			}
+		default:
+			return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Unsupported source volume content %q", contentSource.String())
+		}
+
+		// Create volume from a copy.
+		poolReq := api.DevLXDStorageVolumesPost{
+			Name:        volName,
+			Type:        "custom", // Only custom volumes can be managed by the CSI.
+			ContentType: contentType,
+			Source: api.DevLXDStorageVolumeSource{
+				Type:     api.SourceTypeCopy,
+				Pool:     sourcePoolName,
+				Name:     sourceVolName,
+				Location: sourceTarget,
 			},
-		},
-	}
+			DevLXDStorageVolumePut: api.DevLXDStorageVolumePut{
+				Description: volumeDescription,
+				Config: map[string]string{
+					"size": strconv.FormatInt(sizeBytes, 10),
+				},
+			},
+		}
 
-	op, err := client.CreateStoragePoolVolume(poolName, poolReq)
-	if err == nil {
-		err = op.WaitContext(ctx)
-	}
+		op, err := client.CreateStoragePoolVolume(poolName, poolReq)
+		if err == nil {
+			err = op.WaitContext(ctx)
+		}
 
-	if err != nil {
-		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to create volume %q in storage pool %q: %v", volName, poolName, err)
+		if err != nil {
+			return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to create volume %q in storage pool %q from volume %q in storage pool %q: %v", volName, poolName, sourceVolName, sourcePoolName, err)
+		}
+	} else {
+		// Volume source content is not provided. Create a new volume.
+		poolReq := api.DevLXDStorageVolumesPost{
+			Name:        volName,
+			Type:        "custom", // Only custom volumes can be managed by the CSI.
+			ContentType: contentType,
+			DevLXDStorageVolumePut: api.DevLXDStorageVolumePut{
+				Description: volumeDescription,
+				Config: map[string]string{
+					"size": strconv.FormatInt(sizeBytes, 10),
+				},
+			},
+		}
+
+		op, err := client.CreateStoragePoolVolume(poolName, poolReq)
+		if err == nil {
+			err = op.WaitContext(ctx)
+		}
+
+		if err != nil {
+			return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to create volume %q in storage pool %q: %v", volName, poolName, err)
+		}
 	}
 
 	// Set additional parameters to the volume for later use.
