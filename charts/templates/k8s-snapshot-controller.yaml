@@ -1,0 +1,56 @@
+{{ if .Values.snapshotter.enabled }}
+{{- $_ := .Values.snapshotter.controller.name | required "Missing value for snapshotter.controller.name" }}
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ .Values.snapshotter.controller.name }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{ include "lxd-csi-driver.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.snapshotter.controller.replicas }}
+  selector:
+    matchLabels:
+      {{- include "lxd-csi-driver.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: snapshot-controller
+  {{- /*
+    "The snapshot controller will not be marked as ready if the v1 CRDs are unavailable.
+    The flag --retry-crd-interval-max is used to determine how long the controller
+    will wait for the CRDs to become available before exiting. The default is 30 seconds
+    so minReadySeconds should be set slightly higher than the flag value."
+  */}}
+  minReadySeconds: 35
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        {{- include "lxd-csi-driver.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: snapshot-controller
+    spec:
+      serviceAccountName: {{ .Values.snapshotter.controller.name }}
+      priorityClassName: {{ .Values.snapshotter.controller.priorityClassName }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.driver.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 -}}
+      {{- end }}
+      containers:
+        - name: snapshot-controller
+          image: {{ printf "%s:%s" .Values.snapshotter.controller.image.repository .Values.snapshotter.controller.image.tag }}
+          imagePullPolicy: {{ .Values.snapshotter.controller.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - --leader-election
+            - --retry-crd-interval-max=30s
+          {{- with .Values.snapshotter.controller.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

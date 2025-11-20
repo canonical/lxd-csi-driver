@@ -220,6 +220,29 @@ spec:
           {{- with .Values.controller.csiResizer.resources }}
           resources: {{ toYaml . | nindent 12 }}
           {{- end }}
+        {{- if .Values.snapshotter.enabled }}
+        - name: csi-snapshotter
+          image: {{ printf "%s:%s" .Values.controller.csiSnapshotter.image.repository .Values.controller.csiSnapshotter.image.tag }}
+          imagePullPolicy: {{ .Values.controller.csiSnapshotter.image.pullPolicy }}
+          securityContext:
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - --v=2
+            - --csi-address=$(CSI_ADDRESS)
+            - --timeout=1200s
+            - --leader-election
+          env:
+            - name: CSI_ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          {{- with .Values.controller.csiSnapshotter.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
         - name: csi-liveness-probe
           image: {{ printf "%s:%s" .Values.controller.csiLivenessProbe.image.repository .Values.controller.csiLivenessProbe.image.tag }}
           imagePullPolicy: {{ .Values.controller.csiLivenessProbe.image.pullPolicy }}
