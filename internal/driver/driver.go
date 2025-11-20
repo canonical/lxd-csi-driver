@@ -364,3 +364,22 @@ func splitVolumeID(volumeID string) (clusterMember string, poolName string, volN
 
 	return clusterMember, parts[0], parts[1], nil
 }
+
+// splitSnapshotID splits an internal volume snapshot ID separated into cluster member name,
+// pool name, volume name, and snapshot name.
+func splitSnapshotID(snapshotID string) (clusterMember string, poolName string, volName string, snapshotName string, err error) {
+	if strings.Contains(snapshotID, ":") {
+		clusterMember, snapshotID, _ = strings.Cut(snapshotID, ":")
+	}
+
+	if snapshotID == "" {
+		return "", "", "", "", errors.New("Snapshot ID is empty")
+	}
+
+	parts := strings.Split(snapshotID, "/")
+	if len(parts) != 3 {
+		return "", "", "", "", fmt.Errorf("Invalid snapshot ID %q", snapshotID)
+	}
+
+	return clusterMember, parts[0], parts[1], parts[2], nil
+}
