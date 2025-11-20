@@ -10,6 +10,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/canonical/lxd-csi-driver/internal/errors"
 	"github.com/canonical/lxd/lxd/locking"
@@ -364,6 +365,82 @@ func (c *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolu
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
+}
+
+// CreateSnapshot creates a snapshot of a PVC that references an existing LXD custom volume.
+func (c *controllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+	client, err := c.driver.DevLXDClient()
+	if err != nil {
+		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateSnapshot: %v", err)
+	}
+
+	if req.Name == "" {
+		return nil, status.Error(codes.InvalidArgument, "CreateSnapshot: Snapshot name cannot be empty")
+	}
+
+	if req.SourceVolumeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "CreateSnapshot: Source volume ID cannot be empty")
+	}
+
+	// Generate snapshot name and ID.
+	// Snapshot name is constructed from the requested snapshot name by removing dashes
+	// from the UUID portion. This shortens the snapshot name while keeping it unique.
+	snapshotPrefix, snapshotUUID, found := strings.Cut(req.Name, "-")
+	if !found {
+		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Unexpected volume name format: %q", req.Name)
+	}
+
+	snapshotName := snapshotPrefix + "-" + strings.ReplaceAll(snapshotUUID, "-", "")
+	snapshotID := req.SourceVolumeId + "/" + snapshotName
+
+	target, poolName, volName, err := splitVolumeID(req.SourceVolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "CreateSnapshot: %v", err)
+	}
+
+	// Set target if provided and LXD is clustered.
+	if target != "" && c.driver.isClustered {
+		client = client.UseTarget(target)
+	}
+
+	unlock := locking.TryLock(snapshotID)
+	if unlock == nil {
+		return nil, status.Errorf(codes.Aborted, "CreateSnapshot: Failed to obtain lock %q", snapshotID)
+	}
+
+	defer unlock()
+
+	_, _, err = client.GetStoragePoolVolumeSnapshot(poolName, "custom", volName, snapshotName)
+	if err != nil {
+		if !api.StatusErrorCheck(err, http.StatusNotFound) {
+			return nil, status.Errorf(errors.ToGRPCCode(err), "CreateSnapshot: Failed to retrieve snapshot %q of volume %q from pool %q: %v", snapshotName, volName, poolName, err)
+		}
+
+		// Create snapshot of storage volume.
+		snapshotReq := api.DevLXDStorageVolumeSnapshotsPost{
+			Name:        snapshotName,
+			Description: "Managed by Kubernetes VolumeSnapshot " + snapshotName,
+		}
+
+		// Snapshot does not exist yet. Create it.
+		op, err := client.CreateStoragePoolVolumeSnapshot(poolName, "custom", volName, snapshotReq)
+		if err == nil {
+			err = op.WaitContext(ctx)
+		}
+
+		if err != nil {
+			return nil, status.Errorf(errors.ToGRPCCode(err), "CreateSnapshot: %v", err)
+		}
+	}
+
+	return &csi.CreateSnapshotResponse{
+		Snapshot: &csi.Snapshot{
+			SnapshotId:     snapshotID,
+			SourceVolumeId: req.SourceVolumeId,
+			CreationTime:   timestamppb.Now(),
+			ReadyToUse:     true,
+		},
+	}, nil
 }
 
 // ControllerPublishVolume attaches an existing LXD custom volume to a node.
