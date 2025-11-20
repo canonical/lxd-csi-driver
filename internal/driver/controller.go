@@ -443,6 +443,43 @@ func (c *controllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateSn
 	}, nil
 }
 
+// DeleteSnapshot deletes a snapshot of an LXD custom volume.
+// Missing snapshots are treated as successfully deleted.
+func (c *controllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+	client, err := c.driver.DevLXDClient()
+	if err != nil {
+		return nil, status.Errorf(errors.ToGRPCCode(err), "DeleteSnapshot: %v", err)
+	}
+
+	target, poolName, volName, snapshotName, err := splitSnapshotID(req.SnapshotId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "DeleteSnapshot: %v", err)
+	}
+
+	// Set target if provided and LXD is clustered.
+	if target != "" && c.driver.isClustered {
+		client = client.UseTarget(target)
+	}
+
+	unlock := locking.TryLock(req.SnapshotId)
+	if unlock == nil {
+		return nil, status.Errorf(codes.Aborted, "DeleteSnapshot: Failed to obtain lock %q", req.SnapshotId)
+	}
+
+	defer unlock()
+
+	op, err := client.DeleteStoragePoolVolumeSnapshot(poolName, "custom", volName, snapshotName)
+	if err == nil {
+		err = op.WaitContext(ctx)
+	}
+
+	if err != nil && !api.StatusErrorCheck(err, http.StatusNotFound) {
+		return nil, status.Errorf(errors.ToGRPCCode(err), "DeleteSnapshot: %v", err)
+	}
+
+	return &csi.DeleteSnapshotResponse{}, nil
+}
+
 // ControllerPublishVolume attaches an existing LXD custom volume to a node.
 // If the volume is already attached, the operation is considered successful.
 func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
