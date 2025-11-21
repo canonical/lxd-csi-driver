@@ -3,6 +3,7 @@ package testutils
 import (
 	"os"
 
+	snapshotter "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned"
 	"github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -33,6 +34,13 @@ func GetClientConfig() *rest.Config {
 // GetKubernetesClient creates and returns a Kubernetes clientset for the given REST config.
 func GetKubernetesClient(config *rest.Config) *kubernetes.Clientset {
 	client, err := kubernetes.NewForConfig(config)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	return client
+}
+
+// GetSnapshotterClient creates and returns an external snapshotter clientset for the given REST config.
+func GetSnapshotterClient(config *rest.Config) *snapshotter.Clientset {
+	client, err := snapshotter.NewForConfig(config)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	return client
 }
