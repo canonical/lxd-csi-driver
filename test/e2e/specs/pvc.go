@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 
 	"github.com/canonical/lxd-csi-driver/test/testutils"
@@ -31,7 +32,7 @@ type PersistentVolumeClaim struct {
 
 // NewPersistentVolumeClaim creates a new PersistentVolumeClaim with the given name and
 // namespace. By default, the size is set to 64MiB and access mode is set to ReadWriteOnce.
-func NewPersistentVolumeClaim(client *kubernetes.Clientset, name string, namespace string) PersistentVolumeClaim {
+func NewPersistentVolumeClaim(cfg *rest.Config, name string, namespace string) PersistentVolumeClaim {
 	manifest := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testutils.GenerateName(name),
@@ -51,7 +52,7 @@ func NewPersistentVolumeClaim(client *kubernetes.Clientset, name string, namespa
 
 	return PersistentVolumeClaim{
 		PersistentVolumeClaim: manifest,
-		client:                client,
+		client:                testutils.GetKubernetesClient(cfg),
 	}
 }
 
