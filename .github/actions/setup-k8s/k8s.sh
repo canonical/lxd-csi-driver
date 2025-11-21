@@ -56,7 +56,7 @@ setEnv() {
     : "${K8S_SNAP_CHANNEL:=latest/edge}"
     : "${K8S_KUBECONFIG_PATH:=${ROOT_DIR}/.kube/${K8S_CLUSTER_NAME}.yml}" # Do not use "${HOME}/..." by default to avoid overwriting user's kubeconfig.
     : "${K8S_CSI_IMAGE_PATH:=}" # Path to the custom LXD CSI driver image to import to cluster nodes.
-    : "${K8S_CSI_IMAGE_TAG:=latest-edge}"
+    : "${K8S_CSI_IMAGE_TAG:=v0-latest-edge}"
 
     # LXD instance, storage, and network configuration.
     : "${LXD_INSTANCE_IMAGE:=ubuntu-minimal-daily:24.04}"
