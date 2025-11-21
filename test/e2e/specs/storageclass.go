@@ -12,6 +12,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 
 	"github.com/canonical/lxd-csi-driver/internal/driver"
@@ -26,7 +27,7 @@ type StorageClass struct {
 
 // NewStorageClass creates a new StorageClass definition with the given name
 // and target LXD storage pool.
-func NewStorageClass(client *kubernetes.Clientset, namePrefix string, lxdStoragePool string) StorageClass {
+func NewStorageClass(cfg *rest.Config, namePrefix string, lxdStoragePool string) StorageClass {
 	defaultReclaimPolicy := corev1.PersistentVolumeReclaimDelete
 	defaultVolumeBindingMode := storagev1.VolumeBindingWaitForFirstConsumer
 
@@ -42,7 +43,10 @@ func NewStorageClass(client *kubernetes.Clientset, namePrefix string, lxdStorage
 		ReclaimPolicy:     &defaultReclaimPolicy,
 	}
 
-	return StorageClass{manifest, client}
+	return StorageClass{
+		StorageClass: manifest,
+		client:       testutils.GetKubernetesClient(cfg),
+	}
 }
 
 // PrettyName returns the string consisting of StorageClass's name.
