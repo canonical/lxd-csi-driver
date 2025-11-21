@@ -31,7 +31,7 @@ type Pod struct {
 }
 
 // NewPod creates a new Pod definition with the given name, namespace, and image.
-func NewPod(client *kubernetes.Clientset, name string, namespace string) Pod {
+func NewPod(cfg *rest.Config, name string, namespace string) Pod {
 	manifest := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testutils.GenerateName(name),
@@ -49,7 +49,10 @@ func NewPod(client *kubernetes.Clientset, name string, namespace string) Pod {
 		},
 	}
 
-	return Pod{manifest, client}
+	return Pod{
+		Pod:    manifest,
+		client: testutils.GetKubernetesClient(cfg),
+	}
 }
 
 // PrettyName returns the string consisting of Pod's name and namespace.
