@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -92,6 +93,17 @@ func (pvc PersistentVolumeClaim) WithSourcePVC(pvcName string) PersistentVolumeC
 	pvc.Spec.DataSource = &corev1.TypedLocalObjectReference{
 		Kind: "PersistentVolumeClaim",
 		Name: pvcName,
+	}
+
+	return pvc
+}
+
+// WithSourceSnapshot sets the provided VolumeSnapshot as a volume source.
+func (pvc PersistentVolumeClaim) WithSourceSnapshot(snapshotName string) PersistentVolumeClaim {
+	pvc.Spec.DataSource = &corev1.TypedLocalObjectReference{
+		APIGroup: &snapshotv1.SchemeGroupVersion.Group,
+		Kind:     "VolumeSnapshot",
+		Name:     snapshotName,
 	}
 
 	return pvc
