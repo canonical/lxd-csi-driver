@@ -40,6 +40,7 @@ func (c *controllerServer) ControllerGetCapabilities(_ context.Context, _ *csi.C
 }
 
 // CreateVolume creates a new volume in the LXD storage pool.
+// If a volume source is specified, the new volume is created from an existing volume or snapshot.
 func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	client, err := c.driver.DevLXDClient()
 	if err != nil {
@@ -219,7 +220,51 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 		switch contentSource.Type.(type) {
 		case *csi.VolumeContentSource_Snapshot:
-			return nil, status.Error(codes.Unimplemented, "CreateVolume: Using snapshot as volume source is not supported")
+			var sourceSnapshotName string
+
+			sourceSnapshotID := contentSource.GetSnapshot().SnapshotId
+			sourceTarget, sourcePoolName, sourceVolName, sourceSnapshotName, err = splitSnapshotID(sourceSnapshotID)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: %v", err)
+			}
+
+			sourceClient := client
+			if c.driver.isClustered {
+				// Ensure source volume target is respected when LXD is clustered.
+				sourceClient = sourceClient.UseTarget(sourceTarget)
+			} else {
+				// Clear target for non-clustered LXD deployments.
+				sourceTarget = ""
+			}
+
+			// Fetch source volume.
+			sourceSnapshot, _, err := sourceClient.GetStoragePoolVolumeSnapshot(sourcePoolName, "custom", sourceVolName, sourceSnapshotName)
+			if err != nil {
+				return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: Failed to retrieve source volume snapshot %q: %v", sourceSnapshotName, err)
+			}
+
+			// Check if the source volume matches the volume requirements.
+			if sourceSnapshot.ContentType != contentType {
+				return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Content type %q of volume snapshot %q does not match the requested volume content type %q", sourceSnapshot.ContentType, sourceSnapshotName, contentType)
+			}
+
+			sourceSnapshotSize := sourceSnapshot.Config["size"]
+			if sourceSnapshotSize == "" {
+				return nil, status.Errorf(codes.FailedPrecondition, "CreateVolume: Cannot determine size of the source volume snapshot %q: Size is not configured", sourceSnapshotName)
+			}
+
+			sourceSnapshotSizeBytes, err := strconv.ParseInt(sourceSnapshotSize, 10, 64)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "CreateVolume: Failed to parse size %q of the source volume snapshot %q: %v", sourceSnapshotSize, sourceSnapshotName, err)
+			}
+
+			if sourceSnapshotSizeBytes > sizeBytes {
+				return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Source volume size %d is larger than the volume size %d", sourceSnapshotSizeBytes, sizeBytes)
+			}
+
+			// Use "<volume>/<snapshot>" as the source volume name.
+			// LXD will figure out this is a snapshot reference and handle it accordingly.
+			sourceVolName = sourceVolName + "/" + sourceSnapshot.Name
 		case *csi.VolumeContentSource_Volume:
 			sourceVolID := contentSource.GetVolume().VolumeId
 			sourceTarget, sourcePoolName, sourceVolName, err = splitVolumeID(sourceVolID)
