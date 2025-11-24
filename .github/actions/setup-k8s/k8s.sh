@@ -553,6 +553,19 @@ case "${cmd}" in
             lxc network delete "${network}"
         fi
 
+        # Delete auth identities and groups.
+        identity="devlxd/${K8S_CLUSTER_NAME}-lxd-csi-identity"
+        if lxc auth identity show "${identity}" &>/dev/null; then
+            echo "===> Deleting LXD auth identity ${identity} ..."
+            lxc auth identity delete "${identity}"
+        fi
+
+        group="${K8S_CLUSTER_NAME}-lxd-csi-group"
+        if lxc auth group show "${group}" &>/dev/null; then
+            echo "===> Deleting LXD auth group ${group} ..."
+            lxc auth group delete "${group}"
+        fi
+
         # Delete project.
         if lxc project show "${project}" &>/dev/null && [ "${project}" != "default" ]; then
             echo "===> Deleting LXD project ${project} ..."
