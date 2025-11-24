@@ -87,8 +87,8 @@ func (pvc PersistentVolumeClaim) WithSize(size string) PersistentVolumeClaim {
 	return pvc
 }
 
-// WithSource sets the source of the PersistentVolumeClaim.
-func (pvc PersistentVolumeClaim) WithSource(pvcName string) PersistentVolumeClaim {
+// WithSourcePVC sets the provided PersistentVolumeClaim as a volume source.
+func (pvc PersistentVolumeClaim) WithSourcePVC(pvcName string) PersistentVolumeClaim {
 	pvc.Spec.DataSource = &corev1.TypedLocalObjectReference{
 		Kind: "PersistentVolumeClaim",
 		Name: pvcName,

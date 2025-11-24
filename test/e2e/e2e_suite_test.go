@@ -655,7 +655,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume cloning]", func(driver string) {
 			pvcClone := specs.NewPersistentVolumeClaim(cfg, "pvc-cloned", namespace).
 				WithStorageClassName(sc.Name).
 				WithVolumeMode(corev1.PersistentVolumeFilesystem).
-				WithSource(pvc.Name)
+				WithSourcePVC(pvc.Name)
 
 			pvcClone.Create(ctx)
 			defer pvcClone.ForceDelete(context.Background())
@@ -719,7 +719,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume cloning]", func(driver string) {
 			pvcClone := specs.NewPersistentVolumeClaim(cfg, "pvc-cloned", namespace).
 				WithStorageClassName(sc.Name).
 				WithVolumeMode(corev1.PersistentVolumeBlock).
-				WithSource(pvc.Name)
+				WithSourcePVC(pvc.Name)
 
 			pvcClone.Create(ctx)
 			defer pvcClone.ForceDelete(context.Background())
