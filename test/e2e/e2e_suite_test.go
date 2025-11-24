@@ -260,11 +260,11 @@ var _ = ginkgo.DescribeTableSubtree("[Volume read/write]", func(driver string) {
 			// Write to the volume.
 			path := "/mnt/test/test.txt"
 			msg := []byte("This is a test of an attached FS volume.")
-			err := pod.WriteFile(ctx, cfg, path, msg)
+			err := pod.WriteFile(ctx, path, msg)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			// Read back the data.
-			data, err := pod.ReadFile(ctx, cfg, path)
+			data, err := pod.ReadFile(ctx, path)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(data).To(gomega.Equal(msg))
 
@@ -300,11 +300,11 @@ var _ = ginkgo.DescribeTableSubtree("[Volume read/write]", func(driver string) {
 
 			// Write to the volume.
 			msg := []byte("This is a test of an attached block volume.")
-			err := pod.WriteDevice(ctx, cfg, dev, msg)
+			err := pod.WriteDevice(ctx, dev, msg)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			// Read back the data.
-			data, err := pod.ReadDevice(ctx, cfg, dev, len(msg))
+			data, err := pod.ReadDevice(ctx, dev, len(msg))
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(data).To(gomega.Equal(msg))
 
@@ -348,11 +348,11 @@ var _ = ginkgo.DescribeTableSubtree("[Volume release]", func(driver string) {
 			// Write to the volume.
 			path := "/mnt/test/test.txt"
 			msg := []byte("Hello, LXD CSI!")
-			err := pod1.WriteFile(ctx, cfg, path, msg)
+			err := pod1.WriteFile(ctx, path, msg)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			// Read back the data.
-			data, err := pod1.ReadFile(ctx, cfg, path)
+			data, err := pod1.ReadFile(ctx, path)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(data).To(gomega.Equal(msg))
 
@@ -367,7 +367,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume release]", func(driver string) {
 			pvc.WaitBound(ctx)
 
 			// Ensure the data is still there.
-			data, err = pod2.ReadFile(ctx, cfg, path)
+			data, err = pod2.ReadFile(ctx, path)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(data).To(gomega.Equal(msg))
 
@@ -645,7 +645,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume cloning]", func(driver string) {
 
 			// Write to the volume.
 			msg := []byte("This is a test of a cloned FS volume.")
-			err := pod1.WriteDevice(ctx, cfg, filePath, msg)
+			err := pod1.WriteDevice(ctx, filePath, msg)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			// Remove the pod.
@@ -673,7 +673,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume cloning]", func(driver string) {
 			pvc.Delete(ctx)
 
 			// Read back the data from the cloned volume.
-			data, err := pod2.ReadDevice(ctx, cfg, filePath, len(msg))
+			data, err := pod2.ReadDevice(ctx, filePath, len(msg))
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(data).To(gomega.Equal(msg))
 
@@ -709,7 +709,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume cloning]", func(driver string) {
 
 			// Write to the volume.
 			msg := []byte("This is a test of a cloned block volume.")
-			err := pod.WriteDevice(ctx, cfg, dev, msg)
+			err := pod.WriteDevice(ctx, dev, msg)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
 			// Remove no longer needed pod.
@@ -737,7 +737,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume cloning]", func(driver string) {
 			pvc.Delete(ctx)
 
 			// Read back the data from the cloned volume.
-			data, err := pod2.ReadDevice(ctx, cfg, dev, len(msg))
+			data, err := pod2.ReadDevice(ctx, dev, len(msg))
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(data).To(gomega.Equal(msg))
 
