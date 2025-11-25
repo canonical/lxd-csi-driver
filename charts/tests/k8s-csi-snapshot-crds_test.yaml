@@ -1,0 +1,27 @@
+suite: CSI VolumeSnapshot CRDs
+
+templates:
+  - k8s-snapshot-crds.yaml
+
+tests:
+  - it: Expect no CRDs when external snapshotter is disabled (default)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: Expect CRDs when external snapshotter is enabled
+    set:
+      snapshotter:
+        enabled: true
+    asserts:
+      - hasDocuments:
+          count: 3 # VolumeSnapshot, VolumeSnapshotContent, VolumeSnapshotClass
+
+  - it: Expect no CRDs when installCRDs is explicitly disabled
+    set:
+      snapshotter:
+        enabled: true
+        installCRDs: false
+    asserts:
+      - hasDocuments:
+          count: 0
