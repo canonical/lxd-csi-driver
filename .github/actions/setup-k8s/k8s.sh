@@ -56,7 +56,7 @@ setEnv() {
     : "${K8S_SNAP_CHANNEL:=latest/edge}"
     : "${K8S_KUBECONFIG_PATH:=${ROOT_DIR}/.kube/${K8S_CLUSTER_NAME}.yml}" # Do not use "${HOME}/..." by default to avoid overwriting user's kubeconfig.
     : "${K8S_CSI_IMAGE_PATH:=}" # Path to the custom LXD CSI driver image to import to cluster nodes.
-    : "${K8S_CSI_IMAGE_TAG:=latest-edge}"
+    : "${K8S_CSI_IMAGE_TAG:=v0-latest-edge}"
 
     # LXD instance, storage, and network configuration.
     : "${LXD_INSTANCE_IMAGE:=ubuntu-minimal-daily:24.04}"
@@ -551,6 +551,19 @@ case "${cmd}" in
         if lxc network show "${network}" &>/dev/null; then
             echo "===> Deleting LXD network ${network} ..."
             lxc network delete "${network}"
+        fi
+
+        # Delete auth identities and groups.
+        identity="devlxd/${K8S_CLUSTER_NAME}-lxd-csi-identity"
+        if lxc auth identity show "${identity}" &>/dev/null; then
+            echo "===> Deleting LXD auth identity ${identity} ..."
+            lxc auth identity delete "${identity}"
+        fi
+
+        group="${K8S_CLUSTER_NAME}-lxd-csi-group"
+        if lxc auth group show "${group}" &>/dev/null; then
+            echo "===> Deleting LXD auth group ${group} ..."
+            lxc auth group delete "${group}"
         fi
 
         # Delete project.
