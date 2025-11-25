@@ -226,3 +226,25 @@ tests:
       - equal:
           path: metadata.namespace
           value: test-namespace
+
+  - it: Expect snapshot controller sidecar when snapshotter is enabled
+    set:
+      controller:
+        csiSnapshotter:
+          resources:
+            limits:
+              cpu: 150m
+            requests:
+              memory: 128Mi
+      snapshotter:
+        enabled: true
+    asserts:
+      - exists:
+          path: spec.template.spec.containers[?(@.name=="csi-snapshotter")]
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="csi-snapshotter")].resources
+          value:
+            limits:
+              cpu: 150m
+            requests:
+              memory: 128Mi
