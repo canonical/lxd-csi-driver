@@ -1,0 +1,5 @@
+{{- if and .Values.snapshotter.enabled .Values.snapshotter.installCRDs }}
+{{- .Files.Get "files/crd_volume-snapshot-classes.yaml" }}
+{{- .Files.Get "files/crd_volume-snapshot-contents.yaml" }}
+{{- .Files.Get "files/crd_volume-snapshots.yaml" }}
+{{- end }}

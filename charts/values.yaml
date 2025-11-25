@@ -278,6 +278,10 @@ snapshotter:
   # -- (bool) Whether to deploy the external snapshotter to enable VolumeSnapshot functionality.
   enabled: false
 
+  # -- (bool) Whether to install the volume snapshots custom resource definitions (CRDs).
+  # You should disable installation of CRDs if they are already installed in the cluster.
+  installCRDs: true
+
   # -- CSI Snapshot Controller.
   controller:
     # -- (string) Name of the snapshot controller deployment.
