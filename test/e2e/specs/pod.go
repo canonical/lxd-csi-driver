@@ -27,11 +27,12 @@ const testContainerImage = "busybox:latest"
 // Pod represents a Kubernetes Pod.
 type Pod struct {
 	corev1.Pod
+	cfg    *rest.Config
 	client *kubernetes.Clientset
 }
 
 // NewPod creates a new Pod definition with the given name, namespace, and image.
-func NewPod(client *kubernetes.Clientset, name string, namespace string) Pod {
+func NewPod(cfg *rest.Config, name string, namespace string) Pod {
 	manifest := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testutils.GenerateName(name),
@@ -49,7 +50,11 @@ func NewPod(client *kubernetes.Clientset, name string, namespace string) Pod {
 		},
 	}
 
-	return Pod{manifest, client}
+	return Pod{
+		Pod:    manifest,
+		cfg:    cfg,
+		client: testutils.GetKubernetesClient(cfg),
+	}
 }
 
 // PrettyName returns the string consisting of Pod's name and namespace.
@@ -191,16 +196,16 @@ func (p Pod) ForceDelete(ctx context.Context) {
 }
 
 // Exec executes a command in the Pod's first container.
-func (p Pod) Exec(ctx context.Context, cfg *rest.Config, cmd []string) (string, error) {
+func (p Pod) Exec(ctx context.Context, cmd []string) (string, error) {
 	if len(p.Spec.Containers) == 0 {
 		return "", fmt.Errorf("Failed to exec into Pod %q: Pod has no containers", p.Name)
 	}
 
-	return p.ExecContainer(ctx, cfg, p.Spec.Containers[0].Name, cmd)
+	return p.ExecContainer(ctx, p.Spec.Containers[0].Name, cmd)
 }
 
 // ExecContainer executes a command in the pod's container and returns stdout.
-func (p Pod) ExecContainer(ctx context.Context, cfg *rest.Config, container string, cmd []string) (string, error) {
+func (p Pod) ExecContainer(ctx context.Context, container string, cmd []string) (string, error) {
 	execOpts := &corev1.PodExecOptions{
 		Container: container,
 		Command:   cmd,
@@ -216,7 +221,7 @@ func (p Pod) ExecContainer(ctx context.Context, cfg *rest.Config, container stri
 		SubResource("exec").
 		VersionedParams(execOpts, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(cfg, "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(p.cfg, "POST", req.URL())
 	if err != nil {
 		return "", fmt.Errorf("Failed to exec into Pod %q: %w", p.Name, err)
 	}
@@ -243,21 +248,21 @@ func (p Pod) ExecContainer(ctx context.Context, cfg *rest.Config, container stri
 
 // WriteFile writes arbitrary bytes to a filesystem path inside the pod.
 // Data is base64-encoded before sending to avoid issues with shell quoting.
-func (p *Pod) WriteFile(ctx context.Context, cfg *rest.Config, path string, data []byte) error {
+func (p *Pod) WriteFile(ctx context.Context, path string, data []byte) error {
 	ginkgo.By("Write " + strconv.Itoa(len(data)) + " bytes to file " + path + " in pod " + p.PrettyName())
 	b64 := base64.StdEncoding.EncodeToString(data)
 	script := fmt.Sprintf(`
 set -e
 echo %q | base64 -d > %q
 `, b64, path)
-	_, err := p.Exec(ctx, cfg, []string{"sh", "-c", script})
+	_, err := p.Exec(ctx, []string{"sh", "-c", script})
 	return err
 }
 
 // ReadFile reads the entire contents of a file from inside the pod.
-func (p *Pod) ReadFile(ctx context.Context, cfg *rest.Config, path string) ([]byte, error) {
+func (p *Pod) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	ginkgo.By("Read file " + path + " in pod " + p.PrettyName())
-	out, err := p.Exec(ctx, cfg, []string{"sh", "-c", fmt.Sprintf("base64 %q", path)})
+	out, err := p.Exec(ctx, []string{"sh", "-c", fmt.Sprintf("base64 %q", path)})
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +272,7 @@ func (p *Pod) ReadFile(ctx context.Context, cfg *rest.Config, path string) ([]by
 
 // WriteDevice writes raw bytes to a block device inside the Pod.
 // Data is base64-encoded before sending to avoid issues with shell quoting.
-func (p *Pod) WriteDevice(ctx context.Context, cfg *rest.Config, device string, data []byte) error {
+func (p *Pod) WriteDevice(ctx context.Context, device string, data []byte) error {
 	ginkgo.By("Write " + strconv.Itoa(len(data)) + " bytes to device " + device + " in pod " + p.PrettyName())
 	b64 := base64.StdEncoding.EncodeToString(data)
 	script := fmt.Sprintf(`
@@ -275,15 +280,15 @@ set -e
 echo %q | base64 -d | dd of=%q bs=1 conv=fsync,notrunc status=none
 `, b64, device)
 
-	_, err := p.Exec(ctx, cfg, []string{"sh", "-c", script})
+	_, err := p.Exec(ctx, []string{"sh", "-c", script})
 	return err
 }
 
 // ReadDevice reads exactly n bytes from a block device inside the Pod.
-func (p *Pod) ReadDevice(ctx context.Context, cfg *rest.Config, device string, n int) ([]byte, error) {
+func (p *Pod) ReadDevice(ctx context.Context, device string, n int) ([]byte, error) {
 	ginkgo.By("Read " + strconv.Itoa(n) + " bytes from device " + device + " in pod " + p.PrettyName())
 	script := fmt.Sprintf(`dd if=%q bs=1 count=%d status=none | base64`, device, n)
-	out, err := p.Exec(ctx, cfg, []string{"sh", "-c", script})
+	out, err := p.Exec(ctx, []string{"sh", "-c", script})
 	if err != nil {
 		return nil, err
 	}
