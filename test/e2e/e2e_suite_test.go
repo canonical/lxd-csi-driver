@@ -53,7 +53,7 @@ func getTestLXDStorageDrivers() []ginkgo.TableEntry {
 // getTestLXDStoragePool creates a new LXD storage pool with the given driver for testing purposes.
 // It returns the name of the created storage pool and a cleanup function to delete it after use.
 func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
-	poolName = "lxd-csi-" + driver + testutils.GenerateName("")
+	poolName = "lxd-csi-" + driver + "-" + testutils.GenerateStringN(5)
 
 	client, err := lxd.ConnectLXDUnix("", nil)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to connect to local LXD over Unix socket: %v", err)
