@@ -45,10 +45,21 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		return nil, status.Errorf(errors.ToGRPCCode(err), "CreateVolume: %v", err)
 	}
 
-	volName := req.Name
-	if c.driver.volumeNamePrefix != "" {
-		volName = c.driver.volumeNamePrefix + "-" + strings.TrimPrefix(volName, "pvc-")
+	// Construct volume name.
+	// The volume name is constructed from a prefix and the remaining UUID of [req.Name]
+	// after the first dash, with all dashes removed from the UUID. This shortens the
+	// volume name while still keeping it unique.
+	volPrefix, volUUID, found := strings.Cut(req.Name, "-")
+	if !found {
+		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Unexpected volume name format: %q", req.Name)
 	}
+
+	// Override volume prefix if configured.
+	if c.driver.volumeNamePrefix != "" {
+		volPrefix = c.driver.volumeNamePrefix
+	}
+
+	volName := volPrefix + "-" + strings.ReplaceAll(volUUID, "-", "")
 
 	contentSource := req.VolumeContentSource
 
