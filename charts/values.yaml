@@ -164,6 +164,22 @@ controller:
       #   cpu: 10m
       #   memory: 64Mi
 
+  # -- CSI Snapshotter sidecar container configuration.
+  # Enables VolumeSnapshot functionality.
+  # The sidecar is only deployed when [snapshotter.enabled] is true.
+  csiSnapshotter:
+    image:
+      repository: registry.k8s.io/sig-storage/csi-snapshotter
+      tag: v8.4.0
+      pullPolicy: IfNotPresent
+    resources: {}
+      # limits:
+      #   cpu: 100m
+      #   memory: 256Mi
+      # requests:
+      #   cpu: 10m
+      #   memory: 64Mi
+
 # -- CSI Node Plugin (DaemonSet) specific configuration.
 node:
   # -- (string) Name of the CSI node daemon set.
@@ -250,6 +266,40 @@ node:
       repository: registry.k8s.io/sig-storage/livenessprobe
       tag: v2.17.0
       pullPolicy: IfNotPresent
+    resources: {}
+      # limits:
+      #   cpu: 100m
+      #   memory: 256Mi
+      # requests:
+      #   cpu: 10m
+      #   memory: 64Mi
+
+snapshotter:
+  # -- (bool) Whether to deploy the external snapshotter to enable VolumeSnapshot functionality.
+  enabled: false
+
+  # -- (bool) Whether to install the volume snapshots custom resource definitions (CRDs).
+  # You should disable installation of CRDs if they are already installed in the cluster.
+  installCRDs: true
+
+  # -- CSI Snapshot Controller.
+  controller:
+    # -- (string) Name of the snapshot controller deployment.
+    name: snapshot-controller
+
+    # -- (int) Number of replicas for the snapshot controller deployment.
+    replicas: 1
+
+    # -- (string) Allows setting custom priorityClassName for snapshot controller.
+    # By default, system-cluster-critical is used which is the highest priority after
+    # system-node-critical.
+    priorityClassName: system-cluster-critical
+
+    image:
+      repository: registry.k8s.io/sig-storage/snapshot-controller
+      tag: v8.4.0
+      pullPolicy: IfNotPresent
+
     resources: {}
       # limits:
       #   cpu: 100m

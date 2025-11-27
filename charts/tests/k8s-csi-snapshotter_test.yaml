@@ -1,0 +1,83 @@
+suite: CSI External Snapshotter
+
+templates:
+  - k8s-snapshot-controller.yaml
+
+tests:
+  - it: Expect external snapshotter to be disabled by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: Expect external snapshotter resources when enabled
+    set:
+      snapshotter:
+        enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: snapshot-controller
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 1
+      - equal:
+          path: spec.template.spec.priorityClassName
+          value: system-cluster-critical
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: snapshot-controller
+      - isNotEmpty:
+          path: spec.template.metadata.labels
+      - isNotEmpty:
+          path: spec.template.spec.affinity
+      - isNotEmpty:
+          path: spec.template.spec.tolerations
+      - notExists:
+          path: metadata.annotations
+      - notExists:
+          path: spec.template.metadata.annotations
+      - notExists:
+          path: spec.template.spec.nodeSelector
+      - notExists:
+          path: spec.template.spec.imagePullSecrets
+      - notExists:
+          path: spec.template.spec.containers[*].resources
+
+  - it: Expect custom configuration when applied
+    set:
+      snapshotter:
+        enabled: true
+        controller:
+          name: custom-snapshot-controller
+          priorityClassName: custom-priority-class
+          replicas: 3
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+    asserts:
+      - equal:
+          path: metadata.name
+          value: custom-snapshot-controller
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: custom-snapshot-controller
+      - equal:
+          path: spec.replicas
+          value: 3
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="snapshot-controller")].resources
+          value:
+            limits:
+              cpu: 200m
+              memory: 256Mi

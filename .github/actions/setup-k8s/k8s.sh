@@ -440,7 +440,8 @@ installLXDCSIDriver() {
         --timeout 120s \
         --rollback-on-failure \
         --wait \
-        --set driver.image.tag="${K8S_CSI_IMAGE_TAG}"
+        --set driver.image.tag="${K8S_CSI_IMAGE_TAG}" \
+        --set snapshotter.enabled=true
 }
 
 # help prints the usage information for this script.

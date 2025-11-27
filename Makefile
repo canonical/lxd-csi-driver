@@ -1,6 +1,7 @@
 REGISTRY=ghcr.io
 IMAGE=canonical/lxd-csi-driver
 VERSION?=dev
+SNAPSHOT_CRD_VERSION=8.4.0
 
 build:
 	@echo "> Building LXD CSI ...";
@@ -23,3 +24,13 @@ install-helm:
 	@echo "Installing Helm plugin unittest ..."
 	@helm plugin install https://github.com/helm-unittest/helm-unittest > /dev/null || true
 	@echo "Done."
+
+update-crds:
+	@echo "> Updating Helm custom resource definitions (CRDs) ..."
+	@rm -f charts/files/crd_*.yaml
+	@mkdir -p charts/files
+	@CRD_BASE_URL=https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter/refs/tags/v$(SNAPSHOT_CRD_VERSION)/client/config/crd; \
+	wget -q "$$CRD_BASE_URL/snapshot.storage.k8s.io_volumesnapshotclasses.yaml" -O charts/files/crd_volume-snapshot-classes.yaml; \
+	wget -q "$$CRD_BASE_URL/snapshot.storage.k8s.io_volumesnapshotcontents.yaml" -O charts/files/crd_volume-snapshot-contents.yaml; \
+	wget -q "$$CRD_BASE_URL/snapshot.storage.k8s.io_volumesnapshots.yaml" -O charts/files/crd_volume-snapshots.yaml; \
+	echo "Done."
