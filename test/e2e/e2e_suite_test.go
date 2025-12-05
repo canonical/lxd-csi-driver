@@ -228,6 +228,10 @@ var _ = ginkgo.DescribeTableSubtree("[Volume binding mode]", func(driver string)
 
 	ginkgo.It("Create a pod with block and FS volumes",
 		func(ctx ginkgo.SpecContext) {
+			if driver == "dir" {
+				ginkgo.Skip("Skipping volume expansion test for 'dir' driver, as it does not support volume size")
+			}
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 
@@ -327,6 +331,10 @@ var _ = ginkgo.DescribeTableSubtree("[Volume read/write]", func(driver string) {
 
 	ginkgo.It("Write and read block volume",
 		func(ctx ginkgo.SpecContext) {
+			if driver == "dir" {
+				ginkgo.Skip("Skipping volume expansion test for 'dir' driver, as it does not support volume size")
+			}
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 
@@ -740,6 +748,10 @@ var _ = ginkgo.DescribeTableSubtree("[Volume cloning]", func(driver string) {
 
 	ginkgo.It("Write to block volume, clone it, and read from a new volume",
 		func(ctx ginkgo.SpecContext) {
+			if driver == "dir" {
+				ginkgo.Skip("Skipping volume expansion test for 'dir' driver, as it does not support volume size")
+			}
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 
