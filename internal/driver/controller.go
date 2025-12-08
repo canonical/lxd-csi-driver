@@ -611,9 +611,14 @@ func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *c
 		return nil, status.Errorf(lxderrors.ToGRPCCode(err), "ControllerUnpublishVolume: %v", err)
 	}
 
-	_, _, volName, err := splitVolumeID(req.VolumeId)
+	target, _, volName, err := splitVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "ControllerUnpublishVolume: %v", err)
+	}
+
+	// Set target if provided and LXD is clustered.
+	if target != "" && c.driver.isClustered {
+		client = client.UseTarget(target)
 	}
 
 	unlock := locking.TryLock(req.VolumeId)
@@ -623,6 +628,12 @@ func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	defer unlock()
 
+	// Fetch existing instance to retrieve the ETag.
+	_, etag, err := client.GetInstance(req.NodeId)
+	if err != nil {
+		return nil, status.Errorf(lxderrors.ToGRPCCode(err), "ControllerUnpublishVolume: Failed to retrieve instance %q: %v", req.NodeId, err)
+	}
+
 	reqInst := api.DevLXDInstancePut{
 		Devices: map[string]map[string]string{
 			volName: nil,
@@ -631,7 +642,7 @@ func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *c
 
 	// Detach volume.
 	// If volume attachment does not exist, consider the operation successful.
-	err = client.UpdateInstance(req.NodeId, reqInst, "")
+	err = client.UpdateInstance(req.NodeId, reqInst, etag)
 	if err != nil && !api.StatusErrorCheck(err, http.StatusNotFound) {
 		return nil, status.Errorf(lxderrors.ToGRPCCode(err), "ControllerUnpublishVolume: Failed to detach volume %q: %v", volName, err)
 	}
