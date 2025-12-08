@@ -221,7 +221,23 @@ k8sInstall() {
     lxc exec "${instance}" --project "${project}" -- apt-get update
     lxc exec "${instance}" --project "${project}" -- apt-get upgrade -y
     lxc exec "${instance}" --project "${project}" -- sh -c "$(declare -f snapdWorkaround); snapdWorkaround"
-    lxc exec "${instance}" --project "${project}" -- snap install k8s --channel="${k8sSnapChannel}" --classic
+
+    # Attempt K8s install multiple times in case of transient network or snap issues.
+    local success=false
+    for i in $(seq 1 5); do
+        if lxc exec "${instance}" --project "${project}" -- snap install k8s --channel="${k8sSnapChannel}" --classic; then
+            success=true
+            break
+        fi
+
+        echo "===> ${instance}: Retry installing Canonical Kubernetes (attempt ${i}/5) ..."
+        sleep 3
+    done
+
+    if [ "${success}" != "true" ]; then
+        echo "Error: ${instance}: Failed to install Canonical Kubernetes!" >&2
+        return 1
+    fi
 
     # As a convenience, setup alias "k" for kubectl within the instance.
     lxc exec "${instance}" --project "${project}" -- bash -c "echo \"alias k='k8s kubectl'\" >> ~/.bashrc"
@@ -254,12 +270,12 @@ k8sBootstrap() {
     fi
 
     echo "===> ${instance}: Bootstraping Kubernetes cluster ..."
-    lxc exec "${instance}" --project "${project}" -- k8s bootstrap --timeout=5m
+    lxc exec "${instance}" --project "${project}" -- k8s bootstrap --timeout=5m > /dev/null
 
     echo "===> ${instance}: Waiting for Kubernetes cluster to be ready..."
     local retry=10
     for i in $(seq 1 "${retry}"); do
-        if lxc exec "${instance}" --project "${project}" -- k8s status --timeout=1m --wait-ready; then
+        if lxc exec "${instance}" --project "${project}" -- k8s status --timeout=1m --wait-ready > /dev/null; then
             break
         fi
 
@@ -272,7 +288,7 @@ k8sBootstrap() {
     done
 
     echo "==> ${instance}: Disabling local storage ..."
-    lxc exec "${instance}" -- k8s disable local-storage # Disable local storage as it is not needed for testing LXD CSI driver.
+    lxc exec "${instance}" -- k8s disable local-storage > /dev/null # Disable local storage as it is not needed for testing LXD CSI driver.
 }
 
 # k8sJoin join an additional node into already bootstraped Kubernetes cluster.
@@ -438,7 +454,6 @@ installLXDCSIDriver() {
         --kubeconfig "${kubeconfigPath}" \
         --namespace lxd-csi \
         --timeout 120s \
-        --rollback-on-failure \
         --wait \
         --set driver.image.tag="${K8S_CSI_IMAGE_TAG}" \
         --set snapshotter.enabled=true
