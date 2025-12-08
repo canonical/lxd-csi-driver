@@ -20,9 +20,6 @@ var (
 )
 
 func run() error {
-	klog.InitFlags(nil)
-	flag.Parse()
-
 	d := driver.NewDriver(driver.DriverOptions{
 		Name:             *driverName,
 		Endpoint:         *endpoint,
@@ -41,6 +38,9 @@ func run() error {
 }
 
 func main() {
+	klog.InitFlags(nil)
+	flag.Parse()
+
 	err := run()
 	if err != nil {
 		klog.Fatal(err)
