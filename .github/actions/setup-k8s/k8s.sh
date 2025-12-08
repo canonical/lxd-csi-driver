@@ -270,12 +270,12 @@ k8sBootstrap() {
     fi
 
     echo "===> ${instance}: Bootstraping Kubernetes cluster ..."
-    lxc exec "${instance}" --project "${project}" -- k8s bootstrap --timeout=5m
+    lxc exec "${instance}" --project "${project}" -- k8s bootstrap --timeout=5m > /dev/null
 
     echo "===> ${instance}: Waiting for Kubernetes cluster to be ready..."
     local retry=10
     for i in $(seq 1 "${retry}"); do
-        if lxc exec "${instance}" --project "${project}" -- k8s status --timeout=1m --wait-ready; then
+        if lxc exec "${instance}" --project "${project}" -- k8s status --timeout=1m --wait-ready > /dev/null; then
             break
         fi
 
@@ -288,7 +288,7 @@ k8sBootstrap() {
     done
 
     echo "==> ${instance}: Disabling local storage ..."
-    lxc exec "${instance}" -- k8s disable local-storage # Disable local storage as it is not needed for testing LXD CSI driver.
+    lxc exec "${instance}" -- k8s disable local-storage > /dev/null # Disable local storage as it is not needed for testing LXD CSI driver.
 }
 
 # k8sJoin join an additional node into already bootstraped Kubernetes cluster.
