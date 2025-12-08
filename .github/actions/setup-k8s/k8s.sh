@@ -221,7 +221,23 @@ k8sInstall() {
     lxc exec "${instance}" --project "${project}" -- apt-get update
     lxc exec "${instance}" --project "${project}" -- apt-get upgrade -y
     lxc exec "${instance}" --project "${project}" -- sh -c "$(declare -f snapdWorkaround); snapdWorkaround"
-    lxc exec "${instance}" --project "${project}" -- snap install k8s --channel="${k8sSnapChannel}" --classic
+
+    # Attempt K8s install multiple times in case of transient network or snap issues.
+    local success=false
+    for i in $(seq 1 5); do
+        if lxc exec "${instance}" --project "${project}" -- snap install k8s --channel="${k8sSnapChannel}" --classic; then
+            success=true
+            break
+        fi
+
+        echo "===> ${instance}: Retry installing Canonical Kubernetes (attempt ${i}/5) ..."
+        sleep 3
+    done
+
+    if [ "${success}" != "true" ]; then
+        echo "Error: ${instance}: Failed to install Canonical Kubernetes!" >&2
+        return 1
+    fi
 
     # As a convenience, setup alias "k" for kubectl within the instance.
     lxc exec "${instance}" --project "${project}" -- bash -c "echo \"alias k='k8s kubectl'\" >> ~/.bashrc"
