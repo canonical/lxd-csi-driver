@@ -611,9 +611,14 @@ func (c *controllerServer) ControllerUnpublishVolume(ctx context.Context, req *c
 		return nil, status.Errorf(lxderrors.ToGRPCCode(err), "ControllerUnpublishVolume: %v", err)
 	}
 
-	_, _, volName, err := splitVolumeID(req.VolumeId)
+	target, _, volName, err := splitVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "ControllerUnpublishVolume: %v", err)
+	}
+
+	// Set target if provided and LXD is clustered.
+	if target != "" && c.driver.isClustered {
+		client = client.UseTarget(target)
 	}
 
 	unlock := locking.TryLock(req.VolumeId)
