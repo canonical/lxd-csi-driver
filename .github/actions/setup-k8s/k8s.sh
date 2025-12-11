@@ -316,7 +316,8 @@ k8sJoin() {
     fi
 
     echo "===> ${instance}: Joining to Kubernetes cluster ${clusterName} as ${type} node ..."
-    local joinToken=$(lxc exec "${masterInstance}" --project "${project}" -- k8s get-join-token "${instance}" "${opts[@]}")
+    local joinToken
+    joinToken=$(lxc exec "${masterInstance}" --project "${project}" -- k8s get-join-token "${instance}" "${opts[@]}")
     lxc exec "${instance}" --project "${project}" -- k8s join-cluster "${joinToken}"
 }
 
@@ -365,9 +366,10 @@ k8sWaitReady() {
 # kubeconfig to point to the IP address of the specified instance.
 k8sCopyKubeconfig() {
     local instance="$1"
-    local instanceIP="$(lxdInstanceIP "${instance}")"
     local project="${LXD_PROJECT_NAME}"
     local kubeconfigPath="${K8S_KUBECONFIG_PATH}"
+    local instanceIP
+    instanceIP="$(lxdInstanceIP "${instance}")"
 
     if [ -z "${instance}" ] || [ -z "${kubeconfigPath}" ]; then
         echo "Usage: k8sCopyKubeconfig <instance> <kubeconfigPath>" >&2
