@@ -40,7 +40,7 @@ setEnv() {
     done
 
     # Precheck that LXD is accessible and trusts us.
-    if [ $(lxc query /1.0 | jq -r .auth) != "trusted" ]; then
+    if [ "$(lxc query /1.0 | jq -r .auth)" != "trusted" ]; then
         echo "Error: The LXD server is either not accessible or does not trust the client."
         exit 1
     fi
