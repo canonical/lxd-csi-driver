@@ -323,7 +323,7 @@ k8sJoin() {
 
 # k8sWaitReady waits for the Kubernetes cluster on the specified
 k8sWaitReady() {
-    local timeout="${1:-600}"
+    local timeout="${TIMEOUT:-600}"
     local kubeconfigPath="${K8S_KUBECONFIG_PATH}"
 
     if [ -z "${kubeconfigPath}" ]; then
