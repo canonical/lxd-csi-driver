@@ -7,6 +7,7 @@
 set -euo pipefail
 
 # Source bin/helpers from canonical/lxd-ci repository.
+# shellcheck source=/dev/null
 source <(
   curl -fsSL https://raw.githubusercontent.com/canonical/lxd-ci/refs/heads/main/bin/helpers \
   || { echo "Error: Failed to source bin/helpers from canonical/lxd-ci" >&2; exit 1; }
