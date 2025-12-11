@@ -34,3 +34,17 @@ update-crds:
 	wget -q "$$CRD_BASE_URL/snapshot.storage.k8s.io_volumesnapshotcontents.yaml" -O charts/files/crd_volume-snapshot-contents.yaml; \
 	wget -q "$$CRD_BASE_URL/snapshot.storage.k8s.io_volumesnapshots.yaml" -O charts/files/crd_volume-snapshots.yaml; \
 	echo "Done."
+
+static-analysis:
+	@echo "Running gofmt check ..."
+	@BAD_FORMAT="$$(gofmt -s -d .)"; \
+	if [ -n "$$BAD_FORMAT" ]; then \
+		echo "Formatting issues found in Go file(s):"; \
+		echo "$$BAD_FORMAT"; \
+		exit 1; \
+	fi
+	@echo "Running go vet ..."
+	@go vet ./...
+	@echo "Running shell check ..."
+	@find . -type f -name '*.sh' -print0 | xargs -0 shellcheck
+	@echo "Done."
