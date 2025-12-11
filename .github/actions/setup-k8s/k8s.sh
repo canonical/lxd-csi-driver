@@ -110,7 +110,9 @@ jobWaitAll() {
                     continue
                 fi
 
-                kill -0 "${pids[$n]}" 2>/dev/null && kill "${pids[$n]}" 2>/dev/null || true
+                if kill -0 "${pids[$n]}" 2>/dev/null; then
+                    kill "${pids[$n]}" 2>/dev/null || true
+                fi
             done
 
             wait || true
