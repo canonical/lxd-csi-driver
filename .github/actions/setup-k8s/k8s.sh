@@ -405,10 +405,10 @@ k8sImportImageTarball() {
     for i in $(seq 1 "${K8S_NODE_COUNT}"); do
         instance="${K8S_CLUSTER_NAME}-node-${i}"
         echo "Importing image ${imagePath} to node ${instance} ..."
-        cat "${imagePath}" | lxc exec "${instance}" --project "${project}" -- /snap/k8s/current/bin/ctr \
+        lxc exec "${instance}" --project "${project}" -- /snap/k8s/current/bin/ctr \
             --address /run/containerd/containerd.sock \
             --namespace k8s.io \
-            images import -
+            images import - < "${imagePath}"
     done
 }
 
