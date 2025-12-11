@@ -147,13 +147,13 @@ lxdStorageCreate() {
     local size="${LXD_STORAGE_POOL_SIZE}"
     local driver="${LXD_STORAGE_POOL_DRIVER}"
 
-    opts=""
+    opts=()
     if [ "${size}" != "" ]; then
-        opts="size=${size}"
+        opts+=("size=${size}")
     fi
 
     echo "===> Creating LXD storage pool ${pool} (driver: ${driver}) ..."
-    lxc storage create "${pool}" "${driver}" ${opts}
+    lxc storage create "${pool}" "${driver}" "${opts[@]}"
 }
 
 lxdInstanceCreate() {
@@ -169,9 +169,9 @@ lxdInstanceCreate() {
         return 1
     fi
 
-    opts=""
+    opts=()
     if [ "${instanceType}" = "vm" ]; then
-        opts="--vm"
+        opts+=(--vm)
     fi
 
     # Create LXD virtual machine.
@@ -184,7 +184,7 @@ lxdInstanceCreate() {
         --config limits.memory=4GB \
         --device root,size=16GiB \
         --config security.devlxd.management.volumes=true \
-        ${opts}
+        "${opts[@]}"
 }
 
 # lxdInstanceIP retrieves the IP address of the specified LXD instance.
@@ -310,13 +310,13 @@ k8sJoin() {
         return 1
     fi
 
-    local opts=""
+    local opts=()
     if [ "${type}" = "worker" ]; then
-        opts="--worker"
+        opts+=(--worker)
     fi
 
     echo "===> ${instance}: Joining to Kubernetes cluster ${clusterName} as ${type} node ..."
-    local joinToken=$(lxc exec "${masterInstance}" --project "${project}" -- k8s get-join-token "${instance}" "${opts}")
+    local joinToken=$(lxc exec "${masterInstance}" --project "${project}" -- k8s get-join-token "${instance}" "${opts[@]}")
     lxc exec "${instance}" --project "${project}" -- k8s join-cluster "${joinToken}"
 }
 
