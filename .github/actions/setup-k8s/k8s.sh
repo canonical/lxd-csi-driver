@@ -204,7 +204,7 @@ lxdInstanceIP() {
         ifName="enp5s0" # Default for VMs
     fi
 
-    lxc ls "${instance}" --project "${project}" --format json | jq -r '.[0].state.network.enp5s0.addresses[] | select(.family=="inet") | .address'
+    lxc ls "${instance}" --project "${project}" --format json | jq --arg ifName "${ifName}" -r '.[0].state.network[$ifName].addresses[] | select(.family=="inet") | .address'
 }
 
 # k8sInstall installs Canonical Kubernetes on the specified LXD instance.
