@@ -7,6 +7,7 @@
 set -euo pipefail
 
 # Source bin/helpers from canonical/lxd-ci repository.
+# shellcheck source=/dev/null
 source <(
   curl -fsSL https://raw.githubusercontent.com/canonical/lxd-ci/refs/heads/main/bin/helpers \
   || { echo "Error: Failed to source bin/helpers from canonical/lxd-ci" >&2; exit 1; }
@@ -39,7 +40,7 @@ setEnv() {
     done
 
     # Precheck that LXD is accessible and trusts us.
-    if [ $(lxc query /1.0 | jq -r .auth) != "trusted" ]; then
+    if [ "$(lxc query /1.0 | jq -r .auth)" != "trusted" ]; then
         echo "Error: The LXD server is either not accessible or does not trust the client."
         exit 1
     fi
@@ -109,7 +110,9 @@ jobWaitAll() {
                     continue
                 fi
 
-                kill -0 "${pids[$n]}" 2>/dev/null && kill "${pids[$n]}" 2>/dev/null || true
+                if kill -0 "${pids[$n]}" 2>/dev/null; then
+                    kill "${pids[$n]}" 2>/dev/null || true
+                fi
             done
 
             wait || true
@@ -146,13 +149,13 @@ lxdStorageCreate() {
     local size="${LXD_STORAGE_POOL_SIZE}"
     local driver="${LXD_STORAGE_POOL_DRIVER}"
 
-    opts=""
+    opts=()
     if [ "${size}" != "" ]; then
-        opts="size=${size}"
+        opts+=("size=${size}")
     fi
 
     echo "===> Creating LXD storage pool ${pool} (driver: ${driver}) ..."
-    lxc storage create "${pool}" "${driver}" ${opts}
+    lxc storage create "${pool}" "${driver}" "${opts[@]}"
 }
 
 lxdInstanceCreate() {
@@ -168,9 +171,9 @@ lxdInstanceCreate() {
         return 1
     fi
 
-    opts=""
+    opts=()
     if [ "${instanceType}" = "vm" ]; then
-        opts="--vm"
+        opts+=(--vm)
     fi
 
     # Create LXD virtual machine.
@@ -183,7 +186,7 @@ lxdInstanceCreate() {
         --config limits.memory=4GB \
         --device root,size=16GiB \
         --config security.devlxd.management.volumes=true \
-        ${opts}
+        "${opts[@]}"
 }
 
 # lxdInstanceIP retrieves the IP address of the specified LXD instance.
@@ -203,7 +206,7 @@ lxdInstanceIP() {
         ifName="enp5s0" # Default for VMs
     fi
 
-    lxc ls "${instance}" --project "${project}" --format json | jq -r '.[0].state.network.enp5s0.addresses[] | select(.family=="inet") | .address'
+    lxc ls "${instance}" --project "${project}" --format json | jq --arg ifName "${ifName}" -r '.[0].state.network[$ifName].addresses[] | select(.family=="inet") | .address'
 }
 
 # k8sInstall installs Canonical Kubernetes on the specified LXD instance.
@@ -309,19 +312,20 @@ k8sJoin() {
         return 1
     fi
 
-    local opts=""
+    local opts=()
     if [ "${type}" = "worker" ]; then
-        opts="--worker"
+        opts+=(--worker)
     fi
 
     echo "===> ${instance}: Joining to Kubernetes cluster ${clusterName} as ${type} node ..."
-    local joinToken=$(lxc exec "${masterInstance}" --project "${project}" -- k8s get-join-token "${instance}" "${opts}")
+    local joinToken
+    joinToken=$(lxc exec "${masterInstance}" --project "${project}" -- k8s get-join-token "${instance}" "${opts[@]}")
     lxc exec "${instance}" --project "${project}" -- k8s join-cluster "${joinToken}"
 }
 
 # k8sWaitReady waits for the Kubernetes cluster on the specified
 k8sWaitReady() {
-    local timeout="${1:-600}"
+    local timeout="${TIMEOUT:-600}"
     local kubeconfigPath="${K8S_KUBECONFIG_PATH}"
 
     if [ -z "${kubeconfigPath}" ]; then
@@ -364,9 +368,10 @@ k8sWaitReady() {
 # kubeconfig to point to the IP address of the specified instance.
 k8sCopyKubeconfig() {
     local instance="$1"
-    local instanceIP="$(lxdInstanceIP "${instance}")"
     local project="${LXD_PROJECT_NAME}"
     local kubeconfigPath="${K8S_KUBECONFIG_PATH}"
+    local instanceIP
+    instanceIP="$(lxdInstanceIP "${instance}")"
 
     if [ -z "${instance}" ] || [ -z "${kubeconfigPath}" ]; then
         echo "Usage: k8sCopyKubeconfig <instance> <kubeconfigPath>" >&2
@@ -402,10 +407,10 @@ k8sImportImageTarball() {
     for i in $(seq 1 "${K8S_NODE_COUNT}"); do
         instance="${K8S_CLUSTER_NAME}-node-${i}"
         echo "Importing image ${imagePath} to node ${instance} ..."
-        cat "${imagePath}" | lxc exec "${instance}" --project "${project}" -- /snap/k8s/current/bin/ctr \
+        lxc exec "${instance}" --project "${project}" -- /snap/k8s/current/bin/ctr \
             --address /run/containerd/containerd.sock \
             --namespace k8s.io \
-            images import -
+            images import - < "${imagePath}"
     done
 }
 

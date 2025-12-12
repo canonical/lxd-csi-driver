@@ -30,18 +30,17 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: golangci-lint
+      - name: Static analysis
+        run:
+          set -eu
+          make static-analysis
+
+      - name: Go lint
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
 
       - name: Go unit tests
         run: |
           set -eux
-          BAD_FORMAT="$(gofmt -s -d .)"
-          if [ -n "${BAD_FORMAT}" ]; then
-            echo "Formatting issues found in Go file(s):"
-            echo "${BAD_FORMAT}"
-            exit 1
-          fi
           go test -cover ./internal/...
 
       - name: Helm unit tests
