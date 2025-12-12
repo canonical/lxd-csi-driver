@@ -149,7 +149,7 @@ lxdStorageCreate() {
     local size="${LXD_STORAGE_POOL_SIZE}"
     local driver="${LXD_STORAGE_POOL_DRIVER}"
 
-    opts=()
+    local opts=()
     if [ "${size}" != "" ]; then
         opts+=("size=${size}")
     fi
@@ -171,7 +171,7 @@ lxdInstanceCreate() {
         return 1
     fi
 
-    opts=()
+    local opts=()
     if [ "${instanceType}" = "vm" ]; then
         opts+=(--vm)
     fi
