@@ -106,7 +106,7 @@ jobWaitAll() {
             # Kill remaining.
             local n
             for n in "${!pids[@]}"; do
-                if [ "$n" == "${name}" ]; then
+                if [ "$n" = "${name}" ]; then
                     continue
                 fi
 
@@ -206,7 +206,7 @@ lxdInstanceIP() {
         ifName="enp5s0" # Default for VMs
     fi
 
-    lxc ls "${instance}" --project "${project}" --format json | jq --arg ifName "${ifName}" -r '.[0].state.network[$ifName].addresses[] | select(.family=="inet") | .address'
+    lxc list "${instance}" --project "${project}" --format json | jq --arg ifName "${ifName}" -r '.[0].state.network[$ifName].addresses[] | select(.family=="inet") | .address'
 }
 
 # k8sInstall installs Canonical Kubernetes on the specified LXD instance.
@@ -614,4 +614,3 @@ case "${cmd}" in
         exit 0
         ;;
 esac
-
