@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,8 +17,13 @@ import (
 	"github.com/canonical/lxd-csi-driver/test/e2e/specs"
 	"github.com/canonical/lxd-csi-driver/test/testutils"
 	lxd "github.com/canonical/lxd/client"
+	lxdConfig "github.com/canonical/lxd/lxc/config"
 	"github.com/canonical/lxd/shared/api"
 )
+
+var lxdClient lxd.InstanceServer
+
+const defaultClusteredStoragePool = "default"
 
 func TestE2e(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
@@ -30,6 +36,45 @@ func TestE2e(t *testing.T) {
 	gomega.EnforceDefaultTimeoutsWhenUsingContexts()
 
 	ginkgo.RunSpecs(t, "E2e Suite")
+}
+
+func getLXDClient() lxd.InstanceServer {
+	if lxdClient != nil {
+		return lxdClient
+	}
+
+	var configDir string
+
+	// Determine LXD configuration directory. First check for the presence
+	// of the /var/snap/lxd directory. If the directory exists, use snap's
+	// config path. Otherwise fallback to non-snap config path.
+	_, err := os.Stat("/var/snap/lxd")
+	if err == nil || os.IsExist(err) {
+		configDir = "$HOME/snap/lxd/common/config"
+	} else {
+		configDir = "$HOME/.config/lxc"
+	}
+
+	configDir = os.ExpandEnv(configDir)
+	configPath := filepath.Join(configDir, "config.yml")
+
+	// Try to load client config from determined configDir.
+	// Otherwise load default config.
+	config, err := lxdConfig.LoadConfig(configPath)
+	if err != nil {
+		config = lxdConfig.DefaultConfig()
+	}
+
+	lxdClient, err = config.GetInstanceServer(config.DefaultRemote)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to connect to LXD using default remote: %v", err)
+
+	return lxdClient
+}
+
+func requiresStandaloneLXD() {
+	if getLXDClient().IsClustered() {
+		ginkgo.Skip("SKIP: Test requires standalone LXD")
+	}
 }
 
 // getTestLXDStorageDrivers returns the list of LXD storage drivers to be used for testing.
@@ -53,10 +98,14 @@ func getTestLXDStorageDrivers() []ginkgo.TableEntry {
 // getTestLXDStoragePool creates a new LXD storage pool with the given driver for testing purposes.
 // It returns the name of the created storage pool and a cleanup function to delete it after use.
 func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
-	poolName = "lxd-csi-" + driver + "-" + testutils.GenerateStringN(5)
+	lxdClient := getLXDClient()
 
-	client, err := lxd.ConnectLXDUnix("", nil)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to connect to local LXD over Unix socket: %v", err)
+	if lxdClient.IsClustered() {
+		// XXX: Clustered LXD is tested only with the default storage pool.
+		return defaultClusteredStoragePool, func() {}
+	}
+
+	poolName = "lxd-csi-" + driver + "-" + testutils.GenerateStringN(5)
 
 	config := make(map[string]string)
 	if driver != "dir" {
@@ -77,12 +126,11 @@ func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 		},
 	}
 
-	err = client.CreateStoragePool(req)
+	err := lxdClient.CreateStoragePool(req)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create storage pool %q with driver %q: %v", req.Name, req.Driver, err)
 
 	cleanup = func() {
-		_ = client.DeleteStoragePool(req.Name)
-		client.Disconnect()
+		_ = lxdClient.DeleteStoragePool(req.Name)
 	}
 
 	return poolName, cleanup
@@ -113,6 +161,8 @@ var _ = ginkgo.DescribeTableSubtree("[Volume binding mode]", func(driver string)
 
 	ginkgo.It("Create a volume with binding mode Immediate",
 		func(ctx ginkgo.SpecContext) {
+			requiresStandaloneLXD()
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 
@@ -178,6 +228,10 @@ var _ = ginkgo.DescribeTableSubtree("[Volume binding mode]", func(driver string)
 
 	ginkgo.It("Create a pod with block and FS volumes",
 		func(ctx ginkgo.SpecContext) {
+			if driver == "dir" {
+				ginkgo.Skip("Skipping volume expansion test for 'dir' driver, as it does not support volume size")
+			}
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 
@@ -277,6 +331,10 @@ var _ = ginkgo.DescribeTableSubtree("[Volume read/write]", func(driver string) {
 
 	ginkgo.It("Write and read block volume",
 		func(ctx ginkgo.SpecContext) {
+			if driver == "dir" {
+				ginkgo.Skip("Skipping volume expansion test for 'dir' driver, as it does not support volume size")
+			}
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 
@@ -389,6 +447,8 @@ var _ = ginkgo.DescribeTableSubtree("[Volume access mode] ", func(driver string)
 
 	ginkgo.It("Create volume with access mode ReadWriteOnce",
 		func(ctx ginkgo.SpecContext) {
+			requiresStandaloneLXD()
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 
@@ -428,6 +488,8 @@ var _ = ginkgo.DescribeTableSubtree("[Volume access mode] ", func(driver string)
 
 	ginkgo.It("Create volume with access mode ReadWriteOncePod",
 		func(ctx ginkgo.SpecContext) {
+			requiresStandaloneLXD()
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 
@@ -686,6 +748,10 @@ var _ = ginkgo.DescribeTableSubtree("[Volume cloning]", func(driver string) {
 
 	ginkgo.It("Write to block volume, clone it, and read from a new volume",
 		func(ctx ginkgo.SpecContext) {
+			if driver == "dir" {
+				ginkgo.Skip("Skipping volume expansion test for 'dir' driver, as it does not support volume size")
+			}
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 

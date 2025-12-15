@@ -1,0 +1,1 @@
+../.github/actions/setup-lxd-cluster/lxd-cluster.sh

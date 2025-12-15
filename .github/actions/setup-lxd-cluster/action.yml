@@ -1,0 +1,59 @@
+name: LXD Cluster Setup
+description: Sets up the LXD cluster for testing.
+
+inputs:
+  cluster-name:
+    description: |
+      The name of the cluster. Used as a prefix for cluster member
+      instances and as a name of the remote on a local LXD client.
+    default: cls
+  cluster-size:
+    description: The size of the cluster.
+    default: 3
+  instance-type:
+    description: The instance type of the cluster member.
+    default: 'container'
+    options:
+      - container
+      - virtual-machine
+  lxd-snap-channel:
+    description: Snap channel to use for installing LXD on each cluster member.
+    default: latest/edge
+  storage-driver:
+    description: The storage driver to use for default storage pool.
+    default: dir
+    options:
+      - dir
+      - zfs
+
+runs:
+  using: composite
+  steps:
+      # Remove Docker to avoid conflicts with LXD networks.
+    - name: Remove Docker
+      uses: canonical/lxd/.github/actions/disable-docker@main
+
+    - name: Remove existing snaps
+      shell: bash
+      run: |
+        for s in $(snap list | awk '!/^(Name|core|snapd)/ {print $1}'); do
+          sudo snap remove --purge "${s}" || true
+        done
+
+    - name: Setup LXD
+      uses: canonical/setup-lxd@main
+      with:
+        preseed: |
+          config:
+            core.https_address: 127.0.0.1:8443
+
+    - run: ./lxd-cluster.sh deploy
+      working-directory: ${{ github.action_path }}
+      shell: bash
+      env:
+        CLUSTER_NAME: ${{ inputs.cluster-name }}
+        CLUSTER_SIZE: ${{ inputs.cluster-size }}
+        INSTANCE_TYPE: ${{ inputs.instance-type }}
+        INSTANCE_IMAGE: ubuntu-minimal-daily:24.04
+        VERSION_LXD: ${{ inputs.lxd-snap-channel }}
+        STORAGE_DRIVER: ${{ inputs.storage-driver }}

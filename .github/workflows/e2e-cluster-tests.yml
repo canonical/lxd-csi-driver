@@ -1,0 +1,93 @@
+name: E2E Cluster Test
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-cluster-tests-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # Make sure bash is always invoked with `-eo pipefail`
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+    shell: bash
+
+env:
+  K8S_CLUSTER_NAME: k8s
+
+jobs:
+  e2e-cluster-tests:
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'schedule' || github.repository == 'canonical/lxd-csi-driver' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        storage_driver:
+          - dir
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build CSI driver image
+        id: image
+        run: |
+          set -e
+          make image-export
+          echo "path=lxd-csi-driver.tar" >> "$GITHUB_OUTPUT"
+
+      - name: Install Deps
+        run: |
+          set -e
+          sudo snap install helm --classic
+          sudo snap install kubectl --classic
+
+      - name: Setup LXD cluster
+        uses: ./.github/actions/setup-lxd-cluster
+        with:
+          cluster-name: cls
+          cluster-size: 2
+          storage-driver: ${{ matrix.storage_driver }}
+          instance-type: container # Currently, VMs cannot be used - 3 layers nesting does not work.
+
+      - name: Set Kubeconfig path
+        id: kubeconfig
+        run: |
+          echo "path=${HOME}/.kube/config" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Kubernetes cluster
+        uses: ./.github/actions/setup-k8s
+        with:
+          k8s-cluster-name: ${{ env.K8S_CLUSTER_NAME }}
+          k8s-node-count: 2
+          k8s-snap-channel: latest/edge
+          k8s-kubeconfig-path: ${{ steps.kubeconfig.outputs.path }}
+          k8s-csi-image-path: ${{ steps.image.outputs.path }}
+          k8s-csi-image-tag: dev
+
+      - name: Print cluster info
+        run: |
+          set -e
+          echo "===> Print nodes"
+          kubectl get nodes
+
+          echo "===> Print pods"
+          kubectl get pods -A
+
+      - name: Run E2E tests
+        env:
+          TEST_LXD_STORAGE_DRIVERS: "${{ matrix.storage_driver }}"
+          K8S_KUBECONFIG_PATH: ${{ steps.kubeconfig.outputs.path }}
+        run: |
+          set -e
+          cd test/e2e
+          go install github.com/onsi/ginkgo/v2/ginkgo@$(go list -m -f '{{.Version}}' github.com/onsi/ginkgo/v2)
+          ginkgo -v --timeout 60m .
