@@ -302,7 +302,6 @@ k8sInstall() {
     echo "===> ${instance}: Installing Canonical Kubernetes ..."
     lxc exec "${instance}" --project "${project}" -- apt-get update
     lxc exec "${instance}" --project "${project}" -- apt-get upgrade -y
-    lxc exec "${instance}" --project "${project}" -- sh -c "$(declare -f snapdWorkaround); snapdWorkaround"
 
     # Attempt K8s install multiple times in case of transient network or snap issues.
     local success=false
