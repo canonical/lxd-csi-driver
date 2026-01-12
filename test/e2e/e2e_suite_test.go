@@ -81,15 +81,22 @@ func requiresStandaloneLXD() {
 // It reads the TEST_LXD_STORAGE_DRIVERS environment variable, which should contain a comma-separated
 // list of drivers. If the variable is not set, it defaults to ["dir"].
 func getTestLXDStorageDrivers() []ginkgo.TableEntry {
-	entries := []ginkgo.TableEntry{}
+	driversStr := os.Getenv("TEST_LXD_STORAGE_DRIVERS")
+	drivers := strings.Split(driversStr, ",")
+	entries := make([]ginkgo.TableEntry, 0, len(drivers))
 
-	drivers := os.Getenv("TEST_LXD_STORAGE_DRIVERS")
-	if drivers == "" {
-		drivers = "dir"
+	for _, driver := range drivers {
+		driver = strings.TrimSpace(driver)
+		if driver == "" {
+			continue
+		}
+
+		entries = append(entries, ginkgo.Entry("Driver "+driver, driver))
 	}
 
-	for driver := range strings.SplitSeq(drivers, ",") {
-		entries = append(entries, ginkgo.Entry("Driver "+driver, driver))
+	if len(entries) == 0 {
+		// Default to "dir" driver if no drivers are specified.
+		entries = append(entries, ginkgo.Entry("Driver dir", "dir"))
 	}
 
 	return entries
