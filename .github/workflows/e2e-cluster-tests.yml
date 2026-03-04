@@ -22,7 +22,7 @@ env:
 jobs:
   e2e-cluster-tests:
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name != 'schedule' || github.repository == 'canonical/lxd-csi-driver' }}
+    if: ${{ github.event_name != 'schedule' || github.repository_owner == 'canonical' }}
     strategy:
       fail-fast: false
       matrix:
