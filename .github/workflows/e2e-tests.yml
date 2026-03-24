@@ -22,7 +22,7 @@ env:
 jobs:
   e2e-tests:
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name != 'schedule' || github.repository == 'canonical/lxd-csi-driver' }}
+    if: ${{ github.event_name != 'schedule' || github.repository_owner == 'canonical' }}
     strategy:
       fail-fast: false
       matrix:
@@ -32,8 +32,18 @@ jobs:
           - zfs
           - lvm
     steps:
+      - name: Get workflow target repository
+        id: workflow-info
+        run: |
+          workflow_ref='${{ github.workflow_ref }}'
+          echo "repository=${workflow_ref%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
+          echo "ref=${workflow_ref##*@}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ steps.workflow-info.outputs.repository }}
+          ref: ${{ steps.workflow-info.outputs.ref }}
 
       - name: Install Go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
