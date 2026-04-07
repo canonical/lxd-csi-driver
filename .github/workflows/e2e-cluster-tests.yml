@@ -21,7 +21,8 @@ env:
 
 jobs:
   e2e-cluster-tests:
-    runs-on: ubuntu-24.04
+     # TODO: Shift back to 24.04 once AppArmor issue on 6.17 kernel is fixed.
+    runs-on: ubuntu-22.04
     if: ${{ github.event_name != 'schedule' || github.repository == 'canonical/lxd-csi-driver' }}
     strategy:
       fail-fast: false
