@@ -133,11 +133,15 @@ func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 		},
 	}
 
-	err := lxdClient.CreateStoragePool(req)
+	op, err := lxdClient.CreateStoragePool(req)
+	if err == nil {
+		err = op.Wait()
+	}
+
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create storage pool %q with driver %q: %v", req.Name, req.Driver, err)
 
 	cleanup = func() {
-		_ = lxdClient.DeleteStoragePool(req.Name)
+		_, _ = lxdClient.DeleteStoragePool(req.Name)
 	}
 
 	return poolName, cleanup
