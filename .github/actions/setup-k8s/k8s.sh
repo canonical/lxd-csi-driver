@@ -14,11 +14,16 @@
 set -euo pipefail
 
 # Source bin/helpers from canonical/lxd-ci repository.
-# shellcheck source=/dev/null
-source <(
-  curl -fsSL https://raw.githubusercontent.com/canonical/lxd-ci/refs/heads/main/bin/helpers \
-  || { echo "Error: Failed to source bin/helpers from canonical/lxd-ci" >&2; exit 1; }
-)
+# LXD_CI_HELPERS_PATH can be set to a local path to skip the network fetch.
+if [ -n "${LXD_CI_HELPERS_PATH:-}" ]; then
+    source "${LXD_CI_HELPERS_PATH}"
+else
+    # shellcheck source=/dev/null
+    source <(
+        curl -fsSL https://raw.githubusercontent.com/canonical/lxd-ci/refs/heads/main/bin/helpers \
+        || { echo "Error: Failed to source bin/helpers from canonical/lxd-ci" >&2; exit 1; }
+    )
+fi
 
 # Script dir where the script is located.
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
@@ -527,9 +532,12 @@ installLXDCSIDriver() {
         k8sImportImageTarball "${imagePath}"
     fi
 
+    local chartVersion=()
     if [ "${K8S_CSI_IMAGE_TAG}" = "dev" ]; then
         # Use local chart from repository.
         chartRepo="${ROOT_DIR}/charts"
+    else
+        chartVersion=(--version "${K8S_CSI_IMAGE_TAG}")
     fi
 
     helm install lxd-csi "${chartRepo}" \
@@ -539,7 +547,8 @@ installLXDCSIDriver() {
         --wait \
         --debug \
         --set driver.image.tag="${K8S_CSI_IMAGE_TAG}" \
-        --set snapshotter.enabled=true
+        --set snapshotter.enabled=true \
+        "${chartVersion[@]}"
 }
 
 # help prints the usage information for this script.
