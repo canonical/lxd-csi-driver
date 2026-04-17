@@ -69,7 +69,8 @@ setEnv() {
     : "${K8S_SNAP_CHANNEL:=latest/edge}"
     : "${K8S_KUBECONFIG_PATH:=${ROOT_DIR}/.kube/${K8S_CLUSTER_NAME}.yml}" # Do not use "${HOME}/..." by default to avoid overwriting user's kubeconfig.
     : "${K8S_CSI_IMAGE_PATH:=}" # Path to the custom LXD CSI driver image to import to cluster nodes.
-    : "${K8S_CSI_IMAGE_TAG:=v0-latest-edge}"
+    : "${K8S_CSI_IMAGE_TAG:=latest-edge}"    # Use "dev" to build and use local image from this repository.
+    : "${K8S_CSI_CHART_TAG:=v0-latest-edge}" # Ignored when K8S_CSI_IMAGE_TAG is "dev".
 
     # LXD instance, storage, and network configuration.
     : "${LXD_INSTANCE_IMAGE:=ubuntu-minimal-daily:24.04}"
@@ -537,7 +538,7 @@ installLXDCSIDriver() {
         # Use local chart from repository.
         chartRepo="${ROOT_DIR}/charts"
     else
-        chartVersion=(--version "${K8S_CSI_IMAGE_TAG}")
+        chartVersion=(--version "${K8S_CSI_CHART_TAG}")
     fi
 
     helm install lxd-csi "${chartRepo}" \
