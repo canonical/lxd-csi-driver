@@ -1,16 +1,16 @@
 module github.com/canonical/lxd-csi-driver
 
-go 1.26.1
+go 1.26.2
 
 require (
-	github.com/canonical/lxd v0.0.0-20260406200201-8c342a79d3ec
+	github.com/canonical/lxd v0.0.0-20260416153313-1fb0f56ca65a
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.4.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/sys v0.42.0
+	golang.org/x/sys v0.43.0
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 	k8s.io/api v0.35.3
