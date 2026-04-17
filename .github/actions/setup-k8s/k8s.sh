@@ -532,9 +532,12 @@ installLXDCSIDriver() {
         k8sImportImageTarball "${imagePath}"
     fi
 
+    local chartVersion=()
     if [ "${K8S_CSI_IMAGE_TAG}" = "dev" ]; then
         # Use local chart from repository.
         chartRepo="${ROOT_DIR}/charts"
+    else
+        chartVersion=(--version "${K8S_CSI_IMAGE_TAG}")
     fi
 
     helm install lxd-csi "${chartRepo}" \
@@ -544,7 +547,8 @@ installLXDCSIDriver() {
         --wait \
         --debug \
         --set driver.image.tag="${K8S_CSI_IMAGE_TAG}" \
-        --set snapshotter.enabled=true
+        --set snapshotter.enabled=true \
+        "${chartVersion[@]}"
 }
 
 # help prints the usage information for this script.
