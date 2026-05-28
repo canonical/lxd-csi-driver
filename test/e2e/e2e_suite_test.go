@@ -150,6 +150,10 @@ func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 	return poolName, cleanup
 }
 
+var _ = ginkgo.BeforeEach(func(ctx ginkgo.SpecContext) {
+	waitContainersReady(ctx, testutils.GetKubernetesClient(testutils.GetClientConfig()), "lxd-csi")
+})
+
 var _ = ginkgo.AfterEach(func() {
 	// Provide useful information when test fails.
 	rep := ginkgo.CurrentSpecReport()

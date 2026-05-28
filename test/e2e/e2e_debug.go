@@ -9,11 +9,34 @@ import (
 	"strings"
 	"time"
 
+	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 )
+
+// waitContainersReady waits until all containers in the given namespace are ready.
+func waitContainersReady(ctx context.Context, client *kubernetes.Clientset, namespace string) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	waitReady := func(g gomega.Gomega) {
+		pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+		g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to list pods in namespace %q", namespace)
+		g.Expect(pods.Items).NotTo(gomega.BeEmpty(), "No pods found in namespace %q", namespace)
+
+		for _, pod := range pods.Items {
+			for _, cs := range pod.Status.ContainerStatuses {
+				name := pod.Name + "/" + cs.Name
+				g.Expect(cs.RestartCount).To(gomega.BeZero(), "Container %q has restarted", name)
+				g.Expect(cs.Ready).To(gomega.BeTrue(), "Container %q is not ready", name)
+			}
+		}
+	}
+
+	gomega.Eventually(waitReady).WithContext(ctx).Should(gomega.Succeed())
+}
 
 func printControllerLogs(ctx context.Context, client *kubernetes.Clientset, namespace string, name string, since time.Time) {
 	fmt.Printf("\n=== Controller logs ===\n")

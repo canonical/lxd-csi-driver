@@ -145,7 +145,6 @@ spec:
               readOnly: true
           livenessProbe:
             httpGet:
-              host: localhost
               path: /healthz
               port: 39008
             failureThreshold: 3
@@ -249,7 +248,7 @@ spec:
           args:
             - --v=2
             - --csi-address=$(CSI_ADDRESS)
-            - --http-endpoint=127.0.0.1:39008
+            - --http-endpoint=:39008
             - --probe-timeout=3s
           env:
             - name: CSI_ADDRESS
