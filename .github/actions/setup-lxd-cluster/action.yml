@@ -29,10 +29,6 @@ inputs:
 runs:
   using: composite
   steps:
-      # Remove Docker to avoid conflicts with LXD networks.
-    - name: Remove Docker
-      uses: canonical/lxd/.github/actions/disable-docker@main
-
     - name: Remove existing snaps
       shell: bash
       run: |
