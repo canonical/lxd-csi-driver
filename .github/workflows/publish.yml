@@ -184,10 +184,11 @@ jobs:
           done
 
       - name: Make a release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         if: ${{ needs.precheck.outputs.release != '' }}
-        with:
-          name: ${{ needs.precheck.outputs.release }}
-          tag_name: ${{ needs.precheck.outputs.release }}
-          generate_release_notes: true
-          draft: false
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.precheck.outputs.release }}
+        run: |
+          gh release create "${RELEASE_VERSION}" \
+            --title "${RELEASE_VERSION}" \
+            --generate-notes
