@@ -32,6 +32,7 @@ runs:
     - name: Setup LXD
       uses: canonical/setup-lxd@da2ac84e727dc534215fd14cd088b9209d65893b # main
       with:
+        bridges: "lxdbr0,clsbr0"
         preseed: |
           config:
             core.https_address: 127.0.0.1:8443
