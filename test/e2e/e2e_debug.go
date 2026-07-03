@@ -96,6 +96,7 @@ func getPodLogsBySelector(ctx context.Context, cs *kubernetes.Clientset, namespa
 		for _, c := range p.Spec.Containers {
 			containers = append(containers, c.Name)
 		}
+		sort.Strings(containers)
 
 		// Fetch logs for each container.
 		for _, c := range containers {
