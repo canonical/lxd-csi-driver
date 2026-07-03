@@ -48,10 +48,6 @@ jobs:
           make image-export
           echo "path=lxd-csi-driver.tar" >> "$GITHUB_OUTPUT"
 
-      # Disable Docker to avoid conflicts with LXD.
-      - name: Disable Docker
-        uses: canonical/lxd/.github/actions/disable-docker@main
-
       - name: Install Deps
         run: |
           set -e
