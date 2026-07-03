@@ -29,13 +29,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Remove existing snaps
-      shell: bash
-      run: |
-        for s in $(snap list | awk '!/^(Name|core|snapd)/ {print $1}'); do
-          sudo snap remove --purge "${s}" || true
-        done
-
     - name: Setup LXD
       uses: canonical/setup-lxd@da2ac84e727dc534215fd14cd088b9209d65893b # main
       with:
