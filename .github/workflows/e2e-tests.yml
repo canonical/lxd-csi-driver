@@ -34,6 +34,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Install Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
@@ -48,10 +50,6 @@ jobs:
           make image-export
           echo "path=lxd-csi-driver.tar" >> "$GITHUB_OUTPUT"
 
-      # Disable Docker to avoid conflicts with LXD.
-      - name: Disable Docker
-        uses: canonical/lxd/.github/actions/disable-docker@main
-
       - name: Install Deps
         run: |
           set -e
@@ -59,8 +57,9 @@ jobs:
           sudo snap install kubectl --classic
 
       - name: Setup LXD
-        uses: canonical/setup-lxd@main
+        uses: canonical/setup-lxd@da2ac84e727dc534215fd14cd088b9209d65893b # main
         with:
+          bridges: "lxdbr0,${{ env.K8S_CLUSTER_NAME }}-br0"
           channel: latest/edge
 
       - name: Set Kubeconfig path
