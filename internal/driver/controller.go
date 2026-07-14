@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -714,10 +715,12 @@ func (c *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.
 	}
 
 	// Expand volume.
+	config := maps.Clone(vol.Config)
+	config["size"] = strconv.FormatInt(newSizeBytes, 10)
+
 	volReq := api.DevLXDStorageVolumePut{
-		Config: map[string]string{
-			"size": strconv.FormatInt(newSizeBytes, 10),
-		},
+		Description: vol.Description,
+		Config:      config,
 	}
 
 	op, err := client.UpdateStoragePoolVolume(poolName, "custom", volName, volReq, etag)
