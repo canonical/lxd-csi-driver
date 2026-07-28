@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sys/unix"
 	"k8s.io/klog/v2"
 	kmount "k8s.io/mount-utils"
+	utilexec "k8s.io/utils/exec"
 
 	"github.com/canonical/lxd/lxd/storage/filesystem"
 )
@@ -254,6 +255,34 @@ func WatchFile(ctx context.Context, path string, fileChangeHandler func(path str
 			}
 		}
 	}()
+
+	return nil
+}
+
+// FormatAndMount formats a block device with the specified filesystem (if not already formatted) and mounts it.
+func FormatAndMount(sourcePath string, targetPath string, fsType string, mountOptions []string) error {
+	if sourcePath == "" {
+		return errors.New("Volume mount source path is not specified")
+	}
+
+	if targetPath == "" {
+		return errors.New("Volume mount target path is not specified")
+	}
+
+	err := os.MkdirAll(targetPath, 0750)
+	if err != nil {
+		return err
+	}
+
+	mounter := &kmount.SafeFormatAndMount{
+		Interface: kmount.New(""),
+		Exec:      utilexec.New(),
+	}
+
+	err = mounter.FormatAndMount(sourcePath, targetPath, fsType, mountOptions)
+	if err != nil {
+		return fmt.Errorf("FormatAndMount failed: %w", err)
+	}
 
 	return nil
 }
