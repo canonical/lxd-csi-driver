@@ -10,6 +10,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Usage of an existing path. Exact values depend on the filesystem the test is
+// running on, therefore only the relation between the reported values is checked.
+func Test_Usage(t *testing.T) {
+	dir := t.TempDir()
+
+	stats, err := Usage(dir)
+	require.NoError(t, err)
+
+	require.Positive(t, stats.TotalBytes)
+	require.GreaterOrEqual(t, stats.UsedBytes, int64(0))
+	require.GreaterOrEqual(t, stats.AvailableBytes, int64(0))
+
+	// Blocks reserved for a privileged user are not available, but are not
+	// reported as used either. Therefore, the sum of the used and available
+	// capacity does not have to match the total capacity.
+	require.LessOrEqual(t, stats.UsedBytes+stats.AvailableBytes, stats.TotalBytes)
+
+	// Used and free inodes always add up to the total number of inodes.
+	require.Equal(t, stats.TotalInodes, stats.UsedInodes+stats.FreeInodes)
+
+	// A path on the same filesystem must report the same total capacity.
+	parentStats, err := Usage(filepath.Dir(dir))
+	require.NoError(t, err)
+	require.Equal(t, stats.TotalBytes, parentStats.TotalBytes)
+}
+
+// Usage of a non-existing path must report an error.
+func Test_Usage_NotFound(t *testing.T) {
+	_, err := Usage(filepath.Join(t.TempDir(), "non-existing"))
+	require.Error(t, err)
+}
+
 // waitUntil condition returns true or timeout is reached.
 func waitUntil(t *testing.T, d time.Duration, condition func() bool) {
 	t.Helper()
