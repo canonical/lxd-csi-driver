@@ -257,3 +257,47 @@ func WatchFile(ctx context.Context, path string, fileChangeHandler func(path str
 
 	return nil
 }
+
+// Stats represents the capacity and inode usage of a filesystem.
+type Stats struct {
+	TotalBytes     int64
+	UsedBytes      int64
+	AvailableBytes int64
+
+	TotalInodes int64
+	UsedInodes  int64
+	FreeInodes  int64
+}
+
+// Usage returns the capacity and inode usage of the filesystem that contains the given path.
+func Usage(path string) (Stats, error) {
+	var statfs unix.Statfs_t
+
+	err := unix.Statfs(path, &statfs)
+	if err != nil {
+		return Stats{}, fmt.Errorf("Failed to get filesystem statistics for %q: %w", path, err)
+	}
+
+	// Block counts are expressed in fragment size (Frsize) units, while Bsize is only the
+	// preferred I/O size, so multiplying by Bsize would misreport capacity when the two
+	// differ. Some filesystems leave Frsize unset, in which case Bsize is the best estimate.
+	blockSize := int64(statfs.Frsize)
+	if blockSize <= 0 {
+		blockSize = int64(statfs.Bsize)
+	}
+
+	// Bfree includes blocks reserved for root, while Bavail does not. Available
+	// capacity uses Bavail, so reserved blocks count as neither used nor available.
+	// As a result, used and available bytes may not add up to the total.
+	stats := Stats{
+		TotalBytes:     int64(statfs.Blocks) * blockSize,
+		UsedBytes:      int64(statfs.Blocks-statfs.Bfree) * blockSize,
+		AvailableBytes: int64(statfs.Bavail) * blockSize,
+
+		TotalInodes: int64(statfs.Files),
+		UsedInodes:  int64(statfs.Files - statfs.Ffree),
+		FreeInodes:  int64(statfs.Ffree),
+	}
+
+	return stats, nil
+}
