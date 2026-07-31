@@ -298,7 +298,10 @@ func (d *Driver) Run() error {
 
 		csi.RegisterControllerServer(d.server, NewControllerServer(d))
 	} else {
-		d.SetNodeServiceCapabilities()
+		d.SetNodeServiceCapabilities(
+			csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+		)
+
 		csi.RegisterNodeServer(d.server, NewNodeServer(d))
 	}
 
