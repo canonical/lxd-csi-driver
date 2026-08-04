@@ -97,7 +97,44 @@ func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 			return nil, status.Errorf(codes.Internal, "NodePublishVolume: Source device for volume %q not found: %v", volName, err)
 		}
 	case *csi.VolumeCapability_Mount:
-		// Construct the source path for the filesystem volume.
+		// Check if the volume is attached as a block device to the node (applicable inside VMs).
+		blockDevicePath, err := getDiskDevicePath(volName)
+		if err == nil && blockDevicePath != "" {
+			// Read mount flags and fsType from the request.
+			mnt := req.VolumeCapability.GetMount()
+			var blockMountOptions []string
+			if req.Readonly {
+				blockMountOptions = append(blockMountOptions, "ro")
+			}
+			blockMountOptions = append(blockMountOptions, mnt.MountFlags...)
+
+			// Read and apply custom mount options specified in StorageClass via VolumeContext
+			if customOpts := req.VolumeContext[ParameterBlockMountOptions]; customOpts != "" {
+				for _, opt := range strings.Split(customOpts, ",") {
+					opt = strings.TrimSpace(opt)
+					if opt != "" {
+						blockMountOptions = append(blockMountOptions, opt)
+					}
+				}
+			}
+
+			fsType := mnt.GetFsType()
+			if fsType == "" {
+				fsType = req.VolumeContext[ParameterBlockFilesystem]
+			}
+			if fsType == "" {
+				fsType = "ext4" // default fallback
+			}
+
+			// Format (if needed) and mount the block device.
+			err = fs.FormatAndMount(blockDevicePath, targetPath, fsType, blockMountOptions)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "NodePublishVolume: Failed to format and mount block device %q: %v", blockDevicePath, err)
+			}
+			return &csi.NodePublishVolumeResponse{}, nil
+		}
+
+		// Fallback for directory shares (applicable inside Containers or standard filesystem custom volumes on VMs via virtiofs).
 		sourcePath = filepath.Join(driverFileSystemMountPath, volName)
 
 		// Read mount flags from the request.

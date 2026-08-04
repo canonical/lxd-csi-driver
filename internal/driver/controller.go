@@ -97,9 +97,36 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 		switch k {
 		case ParameterStoragePool:
 			parameters[k] = v
+		case ParameterBlockFilesystem:
+			parameters[k] = v
+		case ParameterBlockMountOptions:
+			parameters[k] = v
 		default:
 			return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: Invalid parameter %q in storage class", k)
 		}
+	}
+
+	fsType := parameters[ParameterBlockFilesystem]
+	if fsType == "" {
+		for _, c := range req.VolumeCapabilities {
+			if mnt := c.GetMount(); mnt != nil {
+				fsType = mnt.GetFsType()
+				if fsType != "" {
+					break
+				}
+			}
+		}
+	}
+
+	volumeConfig := map[string]string{
+		"size": strconv.FormatInt(sizeBytes, 10),
+	}
+
+	if fsType != "" {
+		contentType = "block"
+		// Do not pass block.filesystem or block.mount_options to LXD in volumeConfig,
+		// because raw block volumes do not support these filesystem configuration options on LXD side.
+		// Our NodePublishVolume will handle formatting and mounting inside the node.
 	}
 
 	poolName := req.Parameters[ParameterStoragePool]
@@ -323,9 +350,7 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			},
 			DevLXDStorageVolumePut: api.DevLXDStorageVolumePut{
 				Description: volumeDescription,
-				Config: map[string]string{
-					"size": strconv.FormatInt(sizeBytes, 10),
-				},
+				Config:      volumeConfig,
 			},
 		}
 
@@ -345,9 +370,7 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 			ContentType: contentType,
 			DevLXDStorageVolumePut: api.DevLXDStorageVolumePut{
 				Description: volumeDescription,
-				Config: map[string]string{
-					"size": strconv.FormatInt(sizeBytes, 10),
-				},
+				Config:      volumeConfig,
 			},
 		}
 
@@ -557,7 +580,7 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 	defer unlock()
 
 	// Get existing storage pool volume.
-	_, _, err = client.GetStoragePoolVolume(poolName, "custom", volName)
+	vol, _, err := client.GetStoragePoolVolume(poolName, "custom", volName)
 	if err != nil {
 		if api.StatusErrorCheck(err, http.StatusNotFound) {
 			return nil, status.Errorf(codes.NotFound, "ControllerPublishVolume: Volume %q not found in storage pool %q", volName, poolName)
@@ -593,7 +616,12 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 
 	if contentType == "filesystem" {
 		// For filesystem volumes, provide the path where the volume is mounted.
-		reqInst.Devices[volName]["path"] = filepath.Join(driverFileSystemMountPath, volName)
+		// If the volume has ContentType "block" and is being attached to a virtual machine,
+		// we must not specify "path" so that LXD attaches it as a raw block device instead of via virtiofs.
+		isBlockVolume := vol.ContentType == "block"
+		if !isBlockVolume || !c.driver.IsVirtualMachine() {
+			reqInst.Devices[volName]["path"] = filepath.Join(driverFileSystemMountPath, volName)
+		}
 	}
 
 	err = client.UpdateInstance(req.NodeId, reqInst, etag)
