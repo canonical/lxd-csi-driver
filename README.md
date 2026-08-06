@@ -10,16 +10,16 @@ The LXD CSI driver is an open source implementation of the Container Storage Int
 The LXD CSI driver is documented as part of the official LXD documentation.
 
 Relevant sections include:
-+ An overview of the [LXD CSI driver architecture and lifecycle](https://documentation.ubuntu.com/lxd/latest/explanation/csi/)
-+ Instructions on how to [install and use the LXD CSI driver](https://documentation.ubuntu.com/lxd/latest/howto/storage_csi/)
-+ The [reference documentation](https://documentation.ubuntu.com/lxd/latest/reference/driver_csi/) for the LXD CSI driver CLI and Helm chart
++ An overview of the [LXD CSI driver architecture and lifecycle](https://canonical.com/lxd/docs/latest/explanation/csi/)
++ Instructions on how to [install and use the LXD CSI driver](https://canonical.com/lxd/docs/latest/howto/storage_csi/)
++ The [reference documentation](https://canonical.com/lxd/docs/latest/reference/driver_csi/) for the LXD CSI driver CLI and Helm chart
 
 ## Quick start
 
 This guide explains how to deploy the LXD CSI driver in your Kubernetes cluster.
 
 > [!IMPORTANT]
-> If you’re installing the LXD CSI driver for the first time, we recommend first reviewing the [LXD CSI driver explanation](https://documentation.ubuntu.com/lxd/latest/explanation/csi/) to understand its functionality, and then following the [installation and usage guide](https://documentation.ubuntu.com/lxd/latest/howto/storage_csi/).
+> If you’re installing the LXD CSI driver for the first time, we recommend first reviewing the [LXD CSI driver explanation](https://canonical.com/lxd/docs/latest/explanation/csi/) to understand its functionality, and then following the [installation and usage guide](https://canonical.com/lxd/docs/latest/howto/storage_csi/).
 
 ### Prerequisites
 
@@ -78,4 +78,4 @@ helm install lxd-csi-driver oci://ghcr.io/canonical/charts/lxd-csi-driver \
 
 ### Using CSI driver
 
-To use the CSI driver, create a Kubernetes StorageClass that points to the LXD storage pool you want to manage. See [LXD CSI driver usage examples](https://documentation.ubuntu.com/lxd/latest/howto/storage_csi/#usage-examples) in the LXD documentation.
+To use the CSI driver, create a Kubernetes StorageClass that points to the LXD storage pool you want to manage. See [LXD CSI driver usage examples](https://canonical.com/lxd/docs/latest/howto/storage_csi/#usage-examples) in the LXD documentation.
