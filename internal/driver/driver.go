@@ -68,6 +68,14 @@ const (
 	// This is internal parameter used only by the CSI driver.
 	ParameterStorageDriver = "internal.storageDriver"
 
+	// ParameterBlockFilesystem is the name of the storage class parameter
+	// that specifies the filesystem type for block-backed volumes.
+	ParameterBlockFilesystem = "block.filesystem"
+
+	// ParameterBlockMountOptions is the name of the storage class parameter
+	// that specifies the mount options for block-backed volumes.
+	ParameterBlockMountOptions = "block.mount_options"
+
 	// ParameterPVCName contains the name of the PVC that triggered volume creation.
 	// It is passed to the controller by the CSI provisioner.
 	ParameterPVCName = "csi.storage.k8s.io/pvc/name"
@@ -126,8 +134,9 @@ type Driver struct {
 	hasDevLXDTokenChanged bool
 
 	// LXD cluster member where instance is running on.
-	location    string
-	isClustered bool
+	location     string
+	isClustered  bool
+	instanceType string
 
 	// Prefix used for LXD volume names.
 	volumeNamePrefix string
@@ -225,9 +234,17 @@ func (d *Driver) DevLXDClient() (lxdClient.DevLXDServer, error) {
 	d.devLXD = devLXDClient
 	d.location = info.Location
 	d.isClustered = info.Environment.ServerClustered
+	d.instanceType = info.InstanceType
 	d.hasDevLXDTokenChanged = false
 
 	return d.devLXD, nil
+}
+
+// IsVirtualMachine returns true if the driver is running inside a virtual machine.
+func (d *Driver) IsVirtualMachine() bool {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	return d.instanceType == "virtual-machine"
 }
 
 // Run starts CSI driver gRPC server.
