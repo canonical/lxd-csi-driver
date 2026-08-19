@@ -366,6 +366,16 @@ k8sBootstrap() {
         fi
 
         if [ "${i}" -eq "${retry}" ]; then
+            # Print some debug info about failed k8s deployment.
+            echo "==> DEBUG: k8s snap logs" >&2
+            lxc exec "${instance}" --project "${project}" -- snap logs k8s -n 200 >&2 || true
+
+            echo "==> DEBUG: k8s status" >&2
+            lxc exec "${instance}" --project "${project}" -- k8s status --output-format yaml >&2 || true
+
+            echo "==> DEBUG: k8s pods" >&2
+            lxc exec "${instance}" --project "${project}" -- k8s kubectl get pods --all-namespaces >&2 || true
+
             echo "Error: Kubernetes is still not ready after ${retry} minutes!" >&2
             exit 1
         fi
