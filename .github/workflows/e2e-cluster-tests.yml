@@ -70,7 +70,7 @@ jobs:
         with:
           k8s-cluster-name: ${{ env.K8S_CLUSTER_NAME }}
           k8s-node-count: 2
-          k8s-snap-channel: latest/edge
+          k8s-snap-channel: 1.35-classic/candidate
           k8s-kubeconfig-path: ${{ steps.kubeconfig.outputs.path }}
           k8s-csi-image-path: ${{ steps.image.outputs.path }}
           k8s-csi-image-tag: dev
