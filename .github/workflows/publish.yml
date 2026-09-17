@@ -91,10 +91,10 @@ jobs:
       - precheck
     permissions:
       contents: read
-    uses: ./.github/workflows/tests.yml
+    uses: $/.github/workflows/tests.yml
 
   e2e-tests:
-    uses: ./.github/workflows/e2e-tests.yml
+    uses: $/.github/workflows/e2e-tests.yml
     needs:
       - precheck
       - tests
