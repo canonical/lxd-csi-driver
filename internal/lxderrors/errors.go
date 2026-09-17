@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"google.golang.org/grpc/codes"
 
@@ -37,13 +38,14 @@ func ToGRPCCode(err error) codes.Code {
 		// so return [codes.Unavailable] instead to trigger a retry, which should
 		// succeed on the next attempt.
 		return codes.Unavailable
-	case api.StatusErrorCheck(err, http.StatusLocked): // 423
+	case api.StatusErrorCheck(err, http.StatusLocked), isLockedError(err): // 423
 		// The [http.StatusLocked] is returned by LXD when a resource (for example, a volume)
 		// is currently in use and cannot be modified.
 		// Returning [codes.FailedPrecondition] lets Kubernetes wait until the resource
 		// is no longer in use before retrying.
 		//
-		// For example, an online block volume expansion will fail with [http.StatusLocked].
+		// For example, an online block volume expansion will fail with [http.StatusLocked]
+		// (or "In use" when returned via an asynchronous LXD operation).
 		// When Kubernetes received a [codes.FailedPrecondition], it will wait until the
 		// volume is released, and the error will indicate that the volume supports only
 		// offline expansion.
@@ -55,4 +57,15 @@ func ToGRPCCode(err error) codes.Code {
 	}
 
 	return codes.Internal
+}
+
+// isLockedError checks if the error indicates a resource is locked or in use.
+// Asynchronous LXD operations return "In use" error strings rather than [api.StatusError].
+func isLockedError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := err.Error()
+	return msg == "In use" || strings.HasSuffix(msg, ": In use")
 }
