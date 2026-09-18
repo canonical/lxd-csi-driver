@@ -2,16 +2,38 @@ package e2e
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
 	"github.com/canonical/lxd-csi-driver/test/e2e/specs"
 	"github.com/canonical/lxd-csi-driver/test/testutils"
 )
+
+// getKubernetesNodes returns the hostnames of the Kubernetes nodes, as set in the
+// node label "kubernetes.io/hostname". It skips the test when the cluster has
+// fewer nodes than required.
+func getKubernetesNodes(ctx context.Context, cfg *rest.Config, required int) []string {
+	nodes, err := testutils.GetKubernetesClient(cfg).CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to list Kubernetes nodes")
+
+	hostnames := make([]string, 0, len(nodes.Items))
+	for _, node := range nodes.Items {
+		hostnames = append(hostnames, node.Labels[corev1.LabelHostname])
+	}
+
+	if len(hostnames) < required {
+		ginkgo.Skip("SKIP: Test requires at least " + strconv.Itoa(required) + " Kubernetes nodes")
+	}
+
+	return hostnames
+}
 
 var _ = ginkgo.DescribeTableSubtree("[Volume access mode]", func(driver string) {
 	var cfg *rest.Config
