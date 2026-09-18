@@ -82,6 +82,19 @@ func isSupportedAccessMode(volCap *csi.VolumeCapability) bool {
 	}
 }
 
+// isMultiNodeAccessMode reports whether the access mode of the given VolumeCapability
+// allows the volume to be attached to multiple nodes at once.
+func isMultiNodeAccessMode(volCap *csi.VolumeCapability) bool {
+	switch volCap.GetAccessMode().GetMode() {
+	case csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
+		csi.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER,
+		csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER:
+		return true
+	default:
+		return false
+	}
+}
+
 // isReadOnlyAccessMode reports whether the access mode of the given VolumeCapability
 // permits only reads.
 func isReadOnlyAccessMode(volCap *csi.VolumeCapability) bool {
