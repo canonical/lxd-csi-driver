@@ -191,9 +191,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume stats]", func(driver string) {
 
 	ginkgo.It("Report stats for block volume",
 		func(ctx ginkgo.SpecContext) {
-			if driver == "dir" {
-				ginkgo.Skip("Skipping block volume stats test for 'dir' driver, as it does not support volume size")
-			}
+			requiresResizableBlockVolumes(driver)
 
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
