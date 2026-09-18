@@ -23,10 +23,31 @@ func (f *FakeOperation) WaitContext(ctx context.Context) error {
 type FakeServer struct {
 	lxdClient.DevLXDServer
 
+	GetStateFunc   func() (*api.DevLXDGet, error)
+	GetPoolFunc    func(pool string) (*api.DevLXDStoragePool, string, error)
 	GetVolFunc     func(pool string, volType string, name string) (*api.DevLXDStorageVolume, string, error)
+	CreateVolFunc  func(pool string, volume api.DevLXDStorageVolumesPost) (lxdClient.DevLXDOperation, error)
 	UpdateVolFunc  func(pool string, volType string, name string, volume api.DevLXDStorageVolumePut, ETag string) (lxdClient.DevLXDOperation, error)
 	GetInstFunc    func(name string) (*api.DevLXDInstance, string, error)
 	UpdateInstFunc func(name string, inst api.DevLXDInstancePut, ETag string) error
+}
+
+// GetState returns the devLXD server state.
+func (f *FakeServer) GetState() (*api.DevLXDGet, error) {
+	if f.GetStateFunc != nil {
+		return f.GetStateFunc()
+	}
+
+	return &api.DevLXDGet{}, nil
+}
+
+// GetStoragePool returns the storage pool with the given name.
+func (f *FakeServer) GetStoragePool(pool string) (*api.DevLXDStoragePool, string, error) {
+	if f.GetPoolFunc != nil {
+		return f.GetPoolFunc(pool)
+	}
+
+	return nil, "", nil
 }
 
 // GetStoragePoolVolume returns the storage volume with the given name.
@@ -36,6 +57,15 @@ func (f *FakeServer) GetStoragePoolVolume(pool string, volType string, name stri
 	}
 
 	return nil, "", nil
+}
+
+// CreateStoragePoolVolume creates a new storage volume.
+func (f *FakeServer) CreateStoragePoolVolume(pool string, volume api.DevLXDStorageVolumesPost) (lxdClient.DevLXDOperation, error) {
+	if f.CreateVolFunc != nil {
+		return f.CreateVolFunc(pool, volume)
+	}
+
+	return &FakeOperation{}, nil
 }
 
 // UpdateStoragePoolVolume updates the storage volume with the given name.
