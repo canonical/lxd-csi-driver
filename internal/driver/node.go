@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/canonical/lxd-csi-driver/internal/fs"
+	"github.com/canonical/lxd/lxd/storage/block"
+	"github.com/canonical/lxd/shared"
 )
 
 type nodeServer struct {
@@ -42,6 +44,70 @@ func (n *nodeServer) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
 				AnnotationLXDClusterMember: n.driver.location,
+			},
+		},
+	}, nil
+}
+
+// NodeGetVolumeStats returns the capacity and inode usage of the volume on this node.
+func (n *nodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+	_, _, _, err := splitVolumeID(req.VolumeId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "NodeGetVolumeStats: %v", err)
+	}
+
+	volumePath := req.VolumePath
+	if volumePath == "" {
+		return nil, status.Error(codes.InvalidArgument, "NodeGetVolumeStats: Volume path not provided")
+	}
+
+	// The volume path must be an active mount point. Otherwise, the reported statistics
+	// would belong to the filesystem that hosts the volume path, and not to the volume.
+	mounted, err := fs.IsMountPoint(volumePath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats: %v", err)
+	}
+
+	if !mounted {
+		return nil, status.Errorf(codes.NotFound, "NodeGetVolumeStats: Volume path %q is not mounted", volumePath)
+	}
+
+	// Raw block volumes are not formatted by the driver, therefore only the total
+	// size of the block device can be reported.
+	if shared.IsBlockdevPath(volumePath) {
+		size, err := block.DiskSizeBytes(volumePath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats: %v", err)
+		}
+
+		return &csi.NodeGetVolumeStatsResponse{
+			Usage: []*csi.VolumeUsage{
+				{
+					Unit:  csi.VolumeUsage_BYTES,
+					Total: size,
+				},
+			},
+		}, nil
+	}
+
+	stats, err := fs.Usage(volumePath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodeGetVolumeStats: %v", err)
+	}
+
+	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Unit:      csi.VolumeUsage_BYTES,
+				Total:     stats.TotalBytes,
+				Used:      stats.UsedBytes,
+				Available: stats.AvailableBytes,
+			},
+			{
+				Unit:      csi.VolumeUsage_INODES,
+				Total:     stats.TotalInodes,
+				Used:      stats.UsedInodes,
+				Available: stats.FreeInodes,
 			},
 		},
 	}, nil
