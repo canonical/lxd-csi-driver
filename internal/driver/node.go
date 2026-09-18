@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -71,11 +72,14 @@ func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	}
 
 	// Mount options for the bind mount.
-	// If the volume is read-only, add "ro" option as well.
+	// If the volume is read-only or its access mode permits only reads, add "ro" option as well.
 	mountOptions := []string{"bind"}
-	if req.Readonly {
+	if req.Readonly || isReadOnlyAccessMode(req.VolumeCapability) {
 		mountOptions = append(mountOptions, "ro")
 	}
+
+	// Read mount flags from the request. Block volumes have none.
+	mountOptions = append(mountOptions, req.VolumeCapability.GetMount().GetMountFlags()...)
 
 	mounted, err := fs.IsMountPoint(targetPath)
 	if err != nil {
@@ -83,7 +87,18 @@ func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	}
 
 	if mounted {
-		// Already mounted, nothing to do.
+		// If the target path is already mounted, ensure the mount matches the requested read-only mode.
+		// A mount entry always has either the "ro" or the "rw" option.
+		mode := "rw"
+		if slices.Contains(mountOptions, "ro") {
+			mode = "ro"
+		}
+
+		err = fs.CheckMountOptions(targetPath, []string{mode})
+		if err != nil {
+			return nil, status.Errorf(codes.AlreadyExists, "NodePublishVolume: Target path is already mounted with incompatible options: %v", err)
+		}
+
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
@@ -99,10 +114,6 @@ func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	case *csi.VolumeCapability_Mount:
 		// Construct the source path for the filesystem volume.
 		sourcePath = filepath.Join(driverFileSystemMountPath, volName)
-
-		// Read mount flags from the request.
-		mnt := req.VolumeCapability.GetMount()
-		mountOptions = append(mountOptions, mnt.MountFlags...)
 
 		// Ensure source path is available.
 		if !fs.PathExists(sourcePath) {

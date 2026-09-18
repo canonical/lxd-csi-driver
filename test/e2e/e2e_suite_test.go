@@ -546,6 +546,40 @@ var _ = ginkgo.DescribeTableSubtree("[Volume access mode] ", func(driver string)
 		},
 		ginkgo.SpecTimeout(5*time.Minute),
 	)
+
+	for _, mode := range []struct {
+		accessMode corev1.PersistentVolumeAccessMode
+		csiMode    string
+	}{
+		{corev1.ReadWriteMany, "MULTI_NODE_MULTI_WRITER"},
+		{corev1.ReadOnlyMany, "MULTI_NODE_READER_ONLY"},
+	} {
+		ginkgo.It("Reject volume with access mode "+string(mode.accessMode),
+			func(ctx ginkgo.SpecContext) {
+				poolName, cleanup := getTestLXDStoragePool(driver)
+				defer cleanup()
+
+				sc := specs.NewStorageClass(cfg, "sc", poolName).
+					WithVolumeBindingMode(storagev1.VolumeBindingImmediate)
+				sc.Create(ctx)
+				defer sc.ForceDelete(context.Background())
+
+				// Create FS PVC.
+				pvc := specs.NewPersistentVolumeClaim(cfg, "pvc", namespace).
+					WithStorageClassName(sc.Name).
+					WithAccessModes(mode.accessMode)
+				pvc.Create(ctx)
+				defer pvc.ForceDelete(context.Background())
+
+				// Ensure the volume provisioning is rejected.
+				pvc.WaitEvent(ctx, "ProvisioningFailed", `Access mode "`+mode.csiMode+`" is not supported`)
+
+				// Cleanup.
+				pvc.Delete(ctx)
+			},
+			ginkgo.SpecTimeout(5*time.Minute),
+		)
+	}
 }, getTestLXDStorageDrivers())
 
 var _ = ginkgo.DescribeTableSubtree("[Volume expansion]", func(driver string) {
