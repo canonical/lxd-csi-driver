@@ -8,40 +8,10 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/require"
 
+	"github.com/canonical/lxd-csi-driver/internal/devlxd"
 	lxdClient "github.com/canonical/lxd/client"
 	"github.com/canonical/lxd/shared/api"
 )
-
-// fakeDevLXDOperation implements lxdClient.DevLXDOperation for testing.
-type fakeDevLXDOperation struct {
-	lxdClient.DevLXDOperation
-}
-
-func (f *fakeDevLXDOperation) WaitContext(ctx context.Context) error {
-	return nil
-}
-
-// fakeDevLXDServer mocks lxdClient.DevLXDServer for testing.
-type fakeDevLXDServer struct {
-	lxdClient.DevLXDServer
-
-	getVolFunc    func(pool string, volType string, name string) (*api.DevLXDStorageVolume, string, error)
-	updateVolFunc func(pool string, volType string, name string, volume api.DevLXDStorageVolumePut, ETag string) (lxdClient.DevLXDOperation, error)
-}
-
-func (f *fakeDevLXDServer) GetStoragePoolVolume(pool string, volType string, name string) (*api.DevLXDStorageVolume, string, error) {
-	if f.getVolFunc != nil {
-		return f.getVolFunc(pool, volType, name)
-	}
-	return nil, "", nil
-}
-
-func (f *fakeDevLXDServer) UpdateStoragePoolVolume(pool string, volType string, name string, volume api.DevLXDStorageVolumePut, ETag string) (lxdClient.DevLXDOperation, error) {
-	if f.updateVolFunc != nil {
-		return f.updateVolFunc(pool, volType, name, volume, ETag)
-	}
-	return &fakeDevLXDOperation{}, nil
-}
 
 func TestControllerExpandVolumePreservesConfig(t *testing.T) {
 	// Initialize driver and controller server
@@ -60,8 +30,8 @@ func TestControllerExpandVolumePreservesConfig(t *testing.T) {
 		"other.custom.key": "some-value",
 	}
 
-	fakeClient := &fakeDevLXDServer{
-		getVolFunc: func(pool string, volType string, name string) (*api.DevLXDStorageVolume, string, error) {
+	fakeClient := &devlxd.FakeServer{
+		GetVolFunc: func(pool string, volType string, name string) (*api.DevLXDStorageVolume, string, error) {
 			calledGet = true
 			require.Equal(t, "remote", pool)
 			require.Equal(t, "custom", volType)
@@ -73,7 +43,7 @@ func TestControllerExpandVolumePreservesConfig(t *testing.T) {
 				Config:      maps.Clone(initialConfig),
 			}, "test-etag", nil
 		},
-		updateVolFunc: func(pool string, volType string, name string, volume api.DevLXDStorageVolumePut, ETag string) (lxdClient.DevLXDOperation, error) {
+		UpdateVolFunc: func(pool string, volType string, name string, volume api.DevLXDStorageVolumePut, ETag string) (lxdClient.DevLXDOperation, error) {
 			calledUpdate = true
 			require.Equal(t, "remote", pool)
 			require.Equal(t, "custom", volType)
@@ -85,7 +55,7 @@ func TestControllerExpandVolumePreservesConfig(t *testing.T) {
 			require.Equal(t, "32212254720", volume.Config["size"]) // 30Gi
 			require.Equal(t, "ext4", volume.Config["block.filesystem"])
 			require.Equal(t, "some-value", volume.Config["other.custom.key"])
-			return &fakeDevLXDOperation{}, nil
+			return &devlxd.FakeOperation{}, nil
 		},
 	}
 
