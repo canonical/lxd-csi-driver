@@ -80,6 +80,17 @@ setEnv() {
     : "${LXD_STORAGE_POOL_NAME:=${K8S_CLUSTER_NAME}-storage-pool}"
     : "${LXD_STORAGE_POOL_DRIVER:=zfs}"
     : "${LXD_STORAGE_POOL_SIZE:=$(( K8S_NODE_COUNT * 16 ))GiB}"
+
+    # Private GitHub runners currently are 2 vCPU / 8GiB systems; reduce instance
+    # sizing to fit those limits while leaving the default values intact elsewhere.
+    local cpuCount
+    LXD_INSTANCE_CPU_LIMIT="4"
+    LXD_INSTANCE_MEMORY_LIMIT="4GB"
+    cpuCount="$(nproc 2>/dev/null || echo 4)"
+    if [ "${cpuCount}" -lt 4 ]; then
+        LXD_INSTANCE_CPU_LIMIT="${cpuCount}"
+        LXD_INSTANCE_MEMORY_LIMIT="3GB"
+    fi
 }
 
 # Arrays for job pids and logs
@@ -256,8 +267,8 @@ lxdInstanceCreate() {
         --no-profiles \
         --project "${project}" \
         --storage "${storage}" \
-        --config limits.cpu=4 \
-        --config limits.memory=4GB \
+        --config limits.cpu="${LXD_INSTANCE_CPU_LIMIT}" \
+        --config limits.memory="${LXD_INSTANCE_MEMORY_LIMIT}" \
         --config security.devlxd.management.volumes=true \
         --device root,size=16GiB \
         --target "${target}" \

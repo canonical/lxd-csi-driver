@@ -31,6 +31,16 @@ STORAGE_POOL="${CLUSTER_NAME}-pool"
 STORAGE_DRIVER="${STORAGE_DRIVER:-dir}"
 NETWORK_NAME="${CLUSTER_NAME}br0"
 
+# Private GitHub runners currently are 2 vCPU / 8GiB systems; reduce instance
+# sizing to fit those limits while leaving the default values intact elsewhere.
+INSTANCE_CPU_LIMIT="4"
+INSTANCE_MEMORY_LIMIT="4GiB"
+cpuCount="$(nproc 2>/dev/null || echo 4)"
+if [ "${cpuCount}" -lt 4 ]; then
+    INSTANCE_CPU_LIMIT="${cpuCount}"
+    INSTANCE_MEMORY_LIMIT="3GiB"
+fi
+
 # Source bin/helpers from canonical/lxd-ci repository.
 # shellcheck source=/dev/null
 source <(
@@ -156,8 +166,8 @@ EOF
         lxc init "${INSTANCE_IMAGE}" "${instance}" \
             --storage "${STORAGE_POOL}" \
             --network "${NETWORK_NAME}" \
-            --config limits.cpu=4 \
-            --config limits.memory=4GiB \
+            --config limits.cpu="${INSTANCE_CPU_LIMIT}" \
+            --config limits.memory="${INSTANCE_MEMORY_LIMIT}" \
             --config security.devlxd.images="true" \
             "${args[@]}"
 
