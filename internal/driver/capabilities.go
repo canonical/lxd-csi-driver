@@ -58,6 +58,20 @@ func ValidateVolumeCapabilities(volCaps ...*csi.VolumeCapability) error {
 	return nil
 }
 
+// isSupportedAccessMode reports whether the driver supports the access mode of the given
+// VolumeCapability. An unset access mode is not supported.
+func isSupportedAccessMode(volCap *csi.VolumeCapability) bool {
+	switch volCap.GetAccessMode().GetMode() {
+	case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER,
+		csi.VolumeCapability_AccessMode_SINGLE_NODE_MULTI_WRITER:
+		return true
+	default:
+		return false
+	}
+}
+
 // ParseContentType parses the content type from the given VolumeCapability array.
 func ParseContentType(volCaps ...*csi.VolumeCapability) string {
 	for _, c := range volCaps {
