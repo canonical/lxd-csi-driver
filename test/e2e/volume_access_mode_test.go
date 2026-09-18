@@ -127,6 +127,143 @@ var _ = ginkgo.DescribeTableSubtree("[Volume access mode]", func(driver string) 
 		ginkgo.SpecTimeout(5*time.Minute),
 	)
 
+	ginkgo.It("Create volume with access mode ReadWriteMany",
+		func(ctx ginkgo.SpecContext) {
+			requiresMultiNodeVolumes(driver)
+			nodes := getKubernetesNodes(ctx, cfg, 2)
+
+			poolName, cleanup := getTestLXDStoragePool(driver)
+			defer cleanup()
+
+			sc := specs.NewStorageClass(cfg, "sc", poolName)
+			sc.Create(ctx)
+			defer sc.ForceDelete(context.Background())
+
+			// Create FS PVC.
+			pvc := specs.NewPersistentVolumeClaim(cfg, "pvc", namespace).
+				WithStorageClassName(sc.Name).
+				WithAccessModes(corev1.ReadWriteMany)
+			pvc.Create(ctx)
+			defer pvc.ForceDelete(context.Background())
+
+			// Create pods on different nodes that use the same PVC.
+			pod1 := specs.NewPod(cfg, "pod", namespace).
+				WithPVC(pvc, "/mnt/test").
+				WithNodeSelector(map[string]string{corev1.LabelHostname: nodes[0]})
+			pod2 := specs.NewPod(cfg, "pod", namespace).
+				WithPVC(pvc, "/mnt/test").
+				WithNodeSelector(map[string]string{corev1.LabelHostname: nodes[1]})
+
+			pod1.Create(ctx)
+			defer pod1.ForceDelete(context.Background())
+
+			pod2.Create(ctx)
+			defer pod2.ForceDelete(context.Background())
+
+			// Ensure the pods are running and PVC is bound.
+			pod1.WaitReady(ctx)
+			pod2.WaitReady(ctx)
+			pvc.WaitBound(ctx)
+
+			// Write to the volume from the first pod.
+			path := "/mnt/test/test.txt"
+			msg := []byte("This is a test of a shared FS volume.")
+			err := pod1.WriteFile(ctx, path, msg)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+			// Read back the data from the second pod.
+			data, err := pod2.ReadFile(ctx, path)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(data).To(gomega.Equal(msg))
+
+			// Cleanup.
+			pod1.Delete(ctx)
+			pod2.Delete(ctx)
+			pvc.Delete(ctx)
+		},
+		ginkgo.SpecTimeout(5*time.Minute),
+	)
+
+	ginkgo.It("Create volume with access mode ReadOnlyMany",
+		func(ctx ginkgo.SpecContext) {
+			requiresMultiNodeVolumes(driver)
+			nodes := getKubernetesNodes(ctx, cfg, 2)
+
+			poolName, cleanup := getTestLXDStoragePool(driver)
+			defer cleanup()
+
+			sc := specs.NewStorageClass(cfg, "sc", poolName)
+			sc.Create(ctx)
+			defer sc.ForceDelete(context.Background())
+
+			// Create FS PVC that provides the data for the read-only volume.
+			pvcSource := specs.NewPersistentVolumeClaim(cfg, "pvc", namespace).
+				WithStorageClassName(sc.Name).
+				WithAccessModes(corev1.ReadWriteMany)
+			pvcSource.Create(ctx)
+			defer pvcSource.ForceDelete(context.Background())
+
+			// Create a pod that uses the source PVC.
+			podSource := specs.NewPod(cfg, "pod", namespace).WithPVC(pvcSource, "/mnt/test")
+			podSource.Create(ctx)
+			defer podSource.ForceDelete(context.Background())
+			podSource.WaitReady(ctx)
+
+			// Write to the source volume.
+			path := "/mnt/test/test.txt"
+			msg := []byte("This is a test of a read-only FS volume.")
+			err := podSource.WriteFile(ctx, path, msg)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+
+			// Remove the pod.
+			podSource.Delete(ctx)
+
+			// Create a read-only PVC cloned from the source PVC.
+			pvc := specs.NewPersistentVolumeClaim(cfg, "pvc-cloned", namespace).
+				WithStorageClassName(sc.Name).
+				WithAccessModes(corev1.ReadOnlyMany).
+				WithSourcePVC(pvcSource.Name)
+			pvc.Create(ctx)
+			defer pvc.ForceDelete(context.Background())
+
+			// Create pods on different nodes that use the same PVC.
+			pod1 := specs.NewPod(cfg, "pod", namespace).
+				WithPVC(pvc, "/mnt/test").
+				WithNodeSelector(map[string]string{corev1.LabelHostname: nodes[0]})
+			pod2 := specs.NewPod(cfg, "pod", namespace).
+				WithPVC(pvc, "/mnt/test").
+				WithNodeSelector(map[string]string{corev1.LabelHostname: nodes[1]})
+
+			pod1.Create(ctx)
+			defer pod1.ForceDelete(context.Background())
+
+			pod2.Create(ctx)
+			defer pod2.ForceDelete(context.Background())
+
+			// Ensure the pods are running and PVC is bound.
+			pod1.WaitReady(ctx)
+			pod2.WaitReady(ctx)
+			pvc.WaitBound(ctx)
+
+			// Ensure both pods read the cloned data and cannot write to the volume.
+			for _, pod := range []specs.Pod{pod1, pod2} {
+				data, err := pod.ReadFile(ctx, path)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				gomega.Expect(data).To(gomega.Equal(msg))
+
+				err = pod.WriteFile(ctx, path, []byte("This write must fail."))
+				gomega.Expect(err).To(gomega.MatchError(gomega.ContainSubstring("Read-only file system")), "Write to read-only volume in pod %q did not fail with a read-only file system error", pod.PrettyName())
+			}
+
+			// Cleanup.
+			pod1.Delete(ctx)
+			pod2.Delete(ctx)
+			pvc.Delete(ctx)
+			pvcSource.Delete(ctx)
+		},
+		ginkgo.SpecTimeout(5*time.Minute),
+	)
+
 	for _, mode := range []struct {
 		accessMode corev1.PersistentVolumeAccessMode
 		csiMode    string
