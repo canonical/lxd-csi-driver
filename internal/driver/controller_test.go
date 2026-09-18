@@ -7,11 +7,44 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/canonical/lxd-csi-driver/internal/devlxd"
 	lxdClient "github.com/canonical/lxd/client"
 	"github.com/canonical/lxd/shared/api"
 )
+
+func TestCreateVolumeRejectsUnsupportedAccessMode(t *testing.T) {
+	d := &Driver{
+		name:     "lxd.csi.canonical.com",
+		version:  "test",
+		endpoint: "unix:///csi/csi.sock",
+		nodeID:   "test-node",
+	}
+
+	d.devLXD = &devlxd.FakeServer{}
+
+	controller := NewControllerServer(d)
+
+	req := &csi.CreateVolumeRequest{
+		Name: "pvc-8722b28c-a1b2-c3d4-e5f6-a7b8c9d0e1f2",
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: 67108864, // 64Mi
+		},
+		VolumeCapabilities: []*csi.VolumeCapability{
+			newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER, false),
+		},
+		Parameters: map[string]string{
+			ParameterStoragePool: "pool",
+		},
+	}
+
+	resp, err := controller.CreateVolume(context.Background(), req)
+	require.Nil(t, resp)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
+	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`)
+}
 
 func TestControllerExpandVolumePreservesConfig(t *testing.T) {
 	// Initialize driver and controller server
