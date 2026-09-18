@@ -46,6 +46,30 @@ func TestCreateVolumeRejectsUnsupportedAccessMode(t *testing.T) {
 	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`)
 }
 
+func TestControllerPublishVolumeRejectsUnsupportedAccessMode(t *testing.T) {
+	d := &Driver{
+		name:     "lxd.csi.canonical.com",
+		version:  "test",
+		endpoint: "unix:///csi/csi.sock",
+		nodeID:   "test-node",
+	}
+
+	d.devLXD = &devlxd.FakeServer{}
+
+	controller := NewControllerServer(d)
+
+	req := &csi.ControllerPublishVolumeRequest{
+		VolumeId:         "pool/pvc-volume-name",
+		NodeId:           "test-node",
+		VolumeCapability: newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER, false),
+	}
+
+	resp, err := controller.ControllerPublishVolume(context.Background(), req)
+	require.Nil(t, resp)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
+	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`)
+}
+
 func TestControllerExpandVolumePreservesConfig(t *testing.T) {
 	// Initialize driver and controller server
 	d := &Driver{

@@ -544,6 +544,11 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 		client = client.UseTarget(target)
 	}
 
+	err = ValidateVolumeCapabilities(req.VolumeCapability)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "ControllerPublishVolume: %v", err)
+	}
+
 	contentType := ParseContentType(req.VolumeCapability)
 	if contentType == "" {
 		return nil, status.Error(codes.InvalidArgument, "ControllerPublishVolume: Volume capability must specify either block or filesystem access type")
