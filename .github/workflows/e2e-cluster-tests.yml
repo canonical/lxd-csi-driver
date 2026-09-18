@@ -28,6 +28,7 @@ jobs:
       matrix:
         storage_driver:
           - dir
+          - cephfs
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -57,7 +58,13 @@ jobs:
         with:
           cluster-name: cls
           cluster-size: 2
-          storage-driver: ${{ matrix.storage_driver }}
+          # The default storage pool stores the root disks of the Kubernetes node VMs,
+          # and cephfs supports only custom volumes.
+          storage-driver: ${{ matrix.storage_driver == 'cephfs' && 'dir' || matrix.storage_driver }}
+          microceph-enable: ${{ matrix.storage_driver == 'cephfs' }}
+          # The Ceph client in the LXD snap cannot parse the keys that MicroCeph
+          # latest/edge creates.
+          microceph-snap-channel: tentacle/stable
           instance-type: container # Currently, VMs cannot be used - 3 layers nesting does not work.
 
       - name: Set Kubeconfig path
