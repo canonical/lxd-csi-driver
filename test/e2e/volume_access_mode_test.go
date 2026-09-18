@@ -136,6 +136,8 @@ var _ = ginkgo.DescribeTableSubtree("[Volume access mode]", func(driver string) 
 	} {
 		ginkgo.It("Reject volume with access mode "+string(mode.accessMode),
 			func(ctx ginkgo.SpecContext) {
+				requiresSingleNodeVolumes(driver)
+
 				poolName, cleanup := getTestLXDStoragePool(driver)
 				defer cleanup()
 
@@ -152,7 +154,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume access mode]", func(driver string) 
 				defer pvc.ForceDelete(context.Background())
 
 				// Ensure the volume provisioning is rejected.
-				pvc.WaitEvent(ctx, "ProvisioningFailed", `Access mode "`+mode.csiMode+`" is not supported`)
+				pvc.WaitEvent(ctx, "ProvisioningFailed", `Access mode "`+mode.csiMode+`" is not supported by storage driver`)
 
 				// Cleanup.
 				pvc.Delete(ctx)
