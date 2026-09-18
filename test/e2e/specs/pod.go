@@ -68,6 +68,12 @@ func (p Pod) WithSecurityContext(securityContext *corev1.PodSecurityContext) Pod
 	return p
 }
 
+// WithNodeSelector sets the Pod's node selector.
+func (p Pod) WithNodeSelector(nodeSelector map[string]string) Pod {
+	p.Spec.NodeSelector = nodeSelector
+	return p
+}
+
 // WithPVC adds a PersistentVolumeClaim to the Pod's volumes.
 // The path is the mount path inside the container for filesystem volumes
 // and device path inside the container for block volumes.

@@ -8,6 +8,7 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
+	"github.com/canonical/lxd-csi-driver/internal/driver"
 	"github.com/canonical/lxd-csi-driver/test/testutils"
 	lxd "github.com/canonical/lxd/client"
 	lxdConfig "github.com/canonical/lxd/lxc/config"
@@ -65,6 +66,22 @@ func requiresResizableBlockVolumes(storageDriver string) {
 		ginkgo.Skip("SKIP: Driver dir does not support volume size")
 	case "cephfs":
 		ginkgo.Skip("SKIP: Driver cephfs does not support block volumes")
+	}
+}
+
+// requiresMultiNodeVolumes skips the test when the given LXD storage driver does not
+// support attaching a volume to multiple nodes at once.
+func requiresMultiNodeVolumes(storageDriver string) {
+	if !driver.IsMultiNodeStorageDriver(storageDriver) {
+		ginkgo.Skip("SKIP: Driver " + storageDriver + " does not support multi-node volumes")
+	}
+}
+
+// requiresSingleNodeVolumes skips the test when the given LXD storage driver
+// supports attaching a volume to multiple nodes at once.
+func requiresSingleNodeVolumes(storageDriver string) {
+	if driver.IsMultiNodeStorageDriver(storageDriver) {
+		ginkgo.Skip("SKIP: Driver " + storageDriver + " supports multi-node volumes")
 	}
 }
 
