@@ -115,8 +115,9 @@ func getTestLXDStorageDrivers() []ginkgo.TableEntry {
 func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 	lxdClient := getLXDClient()
 
-	if lxdClient.IsClustered() {
+	if lxdClient.IsClustered() && driver != "cephfs" {
 		// XXX: Clustered LXD is tested only with the default storage pool.
+		// The exception is cephfs, for which the test creates a cluster-wide pool.
 		return defaultClusteredStoragePool, func() {}
 	}
 
@@ -148,6 +149,26 @@ func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 			Config:      config,
 			Description: "LXD CSI Driver E2E Test Storage Pool",
 		},
+	}
+
+	if lxdClient.IsClustered() {
+		// Create the pool on each cluster member before creating it cluster-wide.
+		members, err := lxdClient.GetClusterMemberNames()
+		gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to list LXD cluster members: %v", err)
+
+		for _, member := range members {
+			memberReq := api.StoragePoolsPost{
+				Name:   poolName,
+				Driver: driver,
+			}
+
+			op, err := lxdClient.UseTarget(member).CreateStoragePool(memberReq)
+			if err == nil {
+				err = op.Wait()
+			}
+
+			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create storage pool %q with driver %q on cluster member %q: %v", req.Name, req.Driver, member, err)
+		}
 	}
 
 	op, err := lxdClient.CreateStoragePool(req)
