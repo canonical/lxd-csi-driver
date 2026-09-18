@@ -124,6 +124,14 @@ func TestValidateVolumeCapabilities(t *testing.T) {
 			},
 			expectError: `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`,
 		},
+		{
+			Name: "Ensure nil capability is rejected",
+			VolumeCapabilities: []*csi.VolumeCapability{
+				newVolumeCapability(csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER, false),
+				nil,
+			},
+			expectError: "VolumeCapability cannot be nil",
+		},
 	}
 
 	for _, test := range tests {
