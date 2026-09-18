@@ -31,6 +31,7 @@ jobs:
           - btrfs
           - zfs
           - lvm
+          - cephfs
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,6 +56,14 @@ jobs:
           set -e
           sudo snap install helm --classic
           sudo snap install kubectl --classic
+
+      - name: Setup MicroCeph
+        if: ${{ matrix.storage_driver == 'cephfs' }}
+        uses: canonical/lxd/.github/actions/setup-microceph@44384ab5c1c21636e0f45a6e80f1dfe95cf51c3b
+        with:
+          # The Ceph client in the LXD snap cannot parse the keys that MicroCeph
+          # latest/edge creates.
+          microceph-channel: tentacle/stable
 
       - name: Setup LXD
         uses: canonical/setup-lxd@e3ef25fc529b40aa403b264cdf44e7882b361164
