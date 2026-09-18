@@ -70,9 +70,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume read/write]", func(driver string) {
 
 	ginkgo.It("Write and read block volume",
 		func(ctx ginkgo.SpecContext) {
-			if driver == "dir" {
-				ginkgo.Skip("Skipping volume expansion test for 'dir' driver, as it does not support volume size")
-			}
+			requiresResizableBlockVolumes(driver)
 
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()

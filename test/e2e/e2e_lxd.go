@@ -57,6 +57,17 @@ func requiresStandaloneLXD() {
 	}
 }
 
+// requiresResizableBlockVolumes skips the test when the given LXD storage driver
+// does not support block volumes or volume size.
+func requiresResizableBlockVolumes(storageDriver string) {
+	switch storageDriver {
+	case "dir":
+		ginkgo.Skip("SKIP: Driver dir does not support volume size")
+	case "cephfs":
+		ginkgo.Skip("SKIP: Driver cephfs does not support block volumes")
+	}
+}
+
 // getTestLXDStorageDrivers returns the list of LXD storage drivers to be used for testing.
 // It reads the TEST_LXD_STORAGE_DRIVERS environment variable, which should contain a comma-separated
 // list of drivers. If the variable is not set, it defaults to ["dir"].
