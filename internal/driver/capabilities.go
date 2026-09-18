@@ -82,6 +82,18 @@ func isSupportedAccessMode(volCap *csi.VolumeCapability) bool {
 	}
 }
 
+// isReadOnlyAccessMode reports whether the access mode of the given VolumeCapability
+// permits only reads.
+func isReadOnlyAccessMode(volCap *csi.VolumeCapability) bool {
+	switch volCap.GetAccessMode().GetMode() {
+	case csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+		csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY:
+		return true
+	default:
+		return false
+	}
+}
+
 // ParseContentType parses the content type from the given VolumeCapability array.
 func ParseContentType(volCaps ...*csi.VolumeCapability) string {
 	for _, c := range volCaps {
