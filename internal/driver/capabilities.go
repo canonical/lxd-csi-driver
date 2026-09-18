@@ -3,9 +3,20 @@ package driver
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
+
+// multiNodeStorageDrivers lists the LXD storage drivers that support mounting
+// a volume on multiple cluster members at once.
+var multiNodeStorageDrivers = []string{"cephfs"}
+
+// IsMultiNodeStorageDriver reports whether the given LXD storage driver supports
+// multi-node access modes.
+func IsMultiNodeStorageDriver(storageDriver string) bool {
+	return slices.Contains(multiNodeStorageDrivers, storageDriver)
+}
 
 // NewControllerServiceCapability creates a new ControllerServiceCapability.
 func NewControllerServiceCapability(c csi.ControllerServiceCapability_RPC_Type) *csi.ControllerServiceCapability {
