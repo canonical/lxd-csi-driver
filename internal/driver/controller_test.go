@@ -70,6 +70,178 @@ func TestControllerPublishVolumeRejectsUnsupportedAccessMode(t *testing.T) {
 	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`)
 }
 
+func TestControllerPublishVolumeReadonly(t *testing.T) {
+	tests := []struct {
+		Name           string
+		AccessMode     csi.VolumeCapability_AccessMode_Mode
+		Readonly       bool
+		expectReadonly string
+	}{
+		{
+			Name:           "Ensure single node writer volume is attached read-write",
+			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			Readonly:       false,
+			expectReadonly: "",
+		},
+		{
+			Name:           "Ensure read-only publish request attaches volume read-only",
+			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			Readonly:       true,
+			expectReadonly: "true",
+		},
+		{
+			Name:           "Ensure single node reader only volume is attached read-only",
+			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+			Readonly:       false,
+			expectReadonly: "true",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			d := &Driver{
+				name:     "lxd.csi.canonical.com",
+				version:  "test",
+				endpoint: "unix:///csi/csi.sock",
+				nodeID:   "test-node",
+			}
+
+			var calledUpdate bool
+			d.devLXD = &devlxd.FakeServer{
+				GetInstFunc: func(name string) (*api.DevLXDInstance, string, error) {
+					return &api.DevLXDInstance{Name: name}, "test-etag", nil
+				},
+				UpdateInstFunc: func(name string, inst api.DevLXDInstancePut, ETag string) error {
+					calledUpdate = true
+					require.Equal(t, test.expectReadonly, inst.Devices["pvc-volume-name"]["readonly"])
+					return nil
+				},
+			}
+
+			controller := NewControllerServer(d)
+
+			req := &csi.ControllerPublishVolumeRequest{
+				VolumeId:         "pool/pvc-volume-name",
+				NodeId:           "test-node",
+				VolumeCapability: newVolumeCapability(test.AccessMode, false),
+				Readonly:         test.Readonly,
+			}
+
+			resp, err := controller.ControllerPublishVolume(context.Background(), req)
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			require.True(t, calledUpdate, "UpdateInstance should have been called")
+		})
+	}
+}
+
+func TestControllerPublishVolumeExistingDevice(t *testing.T) {
+	tests := []struct {
+		Name           string
+		DeviceReadonly string
+		AccessMode     csi.VolumeCapability_AccessMode_Mode
+		Readonly       bool
+		expectCode     codes.Code
+	}{
+		{
+			Name:           "Ensure read-write request matches existing read-write device",
+			DeviceReadonly: "",
+			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			Readonly:       false,
+			expectCode:     codes.OK,
+		},
+		{
+			Name:           "Ensure read-only request matches existing read-only device",
+			DeviceReadonly: "true",
+			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			Readonly:       true,
+			expectCode:     codes.OK,
+		},
+		{
+			Name:           "Ensure single node reader only request matches existing read-only device",
+			DeviceReadonly: "true",
+			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+			Readonly:       false,
+			expectCode:     codes.OK,
+		},
+		{
+			Name:           "Ensure read-only request is rejected for existing read-write device",
+			DeviceReadonly: "",
+			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			Readonly:       true,
+			expectCode:     codes.AlreadyExists,
+		},
+		{
+			Name:           "Ensure single node reader only request is rejected for existing read-write device",
+			DeviceReadonly: "",
+			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+			Readonly:       false,
+			expectCode:     codes.AlreadyExists,
+		},
+		{
+			Name:           "Ensure read-write request is rejected for existing read-only device",
+			DeviceReadonly: "true",
+			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			Readonly:       false,
+			expectCode:     codes.AlreadyExists,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			d := &Driver{
+				name:     "lxd.csi.canonical.com",
+				version:  "test",
+				endpoint: "unix:///csi/csi.sock",
+				nodeID:   "test-node",
+			}
+
+			d.devLXD = &devlxd.FakeServer{
+				GetInstFunc: func(name string) (*api.DevLXDInstance, string, error) {
+					dev := map[string]string{
+						"type":   "disk",
+						"source": "pvc-volume-name",
+						"pool":   "pool",
+					}
+
+					if test.DeviceReadonly != "" {
+						dev["readonly"] = test.DeviceReadonly
+					}
+
+					inst := &api.DevLXDInstance{
+						Name:    name,
+						Devices: map[string]map[string]string{"pvc-volume-name": dev},
+					}
+
+					return inst, "test-etag", nil
+				},
+				UpdateInstFunc: func(name string, inst api.DevLXDInstancePut, ETag string) error {
+					require.Fail(t, "UpdateInstance should not have been called")
+					return nil
+				},
+			}
+
+			controller := NewControllerServer(d)
+
+			req := &csi.ControllerPublishVolumeRequest{
+				VolumeId:         "pool/pvc-volume-name",
+				NodeId:           "test-node",
+				VolumeCapability: newVolumeCapability(test.AccessMode, false),
+				Readonly:         test.Readonly,
+			}
+
+			resp, err := controller.ControllerPublishVolume(context.Background(), req)
+			require.Equal(t, test.expectCode, status.Code(err))
+
+			if test.expectCode == codes.OK {
+				require.NotNil(t, resp)
+			} else {
+				require.Nil(t, resp)
+			}
+		})
+	}
+}
+
 func TestControllerExpandVolumePreservesConfig(t *testing.T) {
 	// Initialize driver and controller server
 	d := &Driver{

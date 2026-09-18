@@ -15,6 +15,7 @@ import (
 
 	"github.com/canonical/lxd-csi-driver/internal/lxderrors"
 	"github.com/canonical/lxd/lxd/locking"
+	"github.com/canonical/lxd/shared"
 	"github.com/canonical/lxd/shared/api"
 	"github.com/canonical/lxd/shared/units"
 )
@@ -576,11 +577,19 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 		return nil, status.Errorf(lxderrors.ToGRPCCode(err), "ControllerPublishVolume: %v", err)
 	}
 
+	// Attach the volume as read-only if requested or if the access mode permits only reads.
+	readonly := req.Readonly || isReadOnlyAccessMode(req.VolumeCapability)
+
 	dev, ok := inst.Devices[volName]
 	if ok {
 		// If the device already exists, ensure it matches the expected parameters.
 		if dev["type"] != "disk" || dev["source"] != volName || dev["pool"] != poolName {
 			return nil, status.Errorf(codes.AlreadyExists, "ControllerPublishVolume: Device %q already exists on node %q but does not match expected parameters", volName, req.NodeId)
+		}
+
+		// The volume is already attached, ensure the attachment matches the requested read-only mode.
+		if shared.IsTrue(dev["readonly"]) != readonly {
+			return nil, status.Errorf(codes.AlreadyExists, "ControllerPublishVolume: Volume %q is already attached to node %q but does not match the requested read-only mode", volName, req.NodeId)
 		}
 
 		return &csi.ControllerPublishVolumeResponse{}, nil
@@ -599,6 +608,10 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 	if contentType == "filesystem" {
 		// For filesystem volumes, provide the path where the volume is mounted.
 		reqInst.Devices[volName]["path"] = filepath.Join(driverFileSystemMountPath, volName)
+	}
+
+	if readonly {
+		reqInst.Devices[volName]["readonly"] = "true"
 	}
 
 	err = client.UpdateInstance(req.NodeId, reqInst, etag)
