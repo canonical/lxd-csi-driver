@@ -7,7 +7,7 @@ require (
 	github.com/container-storage-interface/spec v1.13.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0
-	github.com/onsi/ginkgo/v2 v2.32.1
+	github.com/onsi/ginkgo/v2 v2.32.2
 	github.com/onsi/gomega v1.43.0
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/sys v0.48.0
