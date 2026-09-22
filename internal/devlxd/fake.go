@@ -23,8 +23,10 @@ func (f *FakeOperation) WaitContext(ctx context.Context) error {
 type FakeServer struct {
 	lxdClient.DevLXDServer
 
-	GetVolFunc    func(pool string, volType string, name string) (*api.DevLXDStorageVolume, string, error)
-	UpdateVolFunc func(pool string, volType string, name string, volume api.DevLXDStorageVolumePut, ETag string) (lxdClient.DevLXDOperation, error)
+	GetVolFunc     func(pool string, volType string, name string) (*api.DevLXDStorageVolume, string, error)
+	UpdateVolFunc  func(pool string, volType string, name string, volume api.DevLXDStorageVolumePut, ETag string) (lxdClient.DevLXDOperation, error)
+	GetInstFunc    func(name string) (*api.DevLXDInstance, string, error)
+	UpdateInstFunc func(name string, inst api.DevLXDInstancePut, ETag string) error
 }
 
 // GetStoragePoolVolume returns the storage volume with the given name.
@@ -43,4 +45,22 @@ func (f *FakeServer) UpdateStoragePoolVolume(pool string, volType string, name s
 	}
 
 	return &FakeOperation{}, nil
+}
+
+// GetInstance returns the instance with the given name.
+func (f *FakeServer) GetInstance(name string) (*api.DevLXDInstance, string, error) {
+	if f.GetInstFunc != nil {
+		return f.GetInstFunc(name)
+	}
+
+	return &api.DevLXDInstance{Name: name}, "", nil
+}
+
+// UpdateInstance updates the instance with the given name.
+func (f *FakeServer) UpdateInstance(name string, inst api.DevLXDInstancePut, ETag string) error {
+	if f.UpdateInstFunc != nil {
+		return f.UpdateInstFunc(name, inst, ETag)
+	}
+
+	return nil
 }

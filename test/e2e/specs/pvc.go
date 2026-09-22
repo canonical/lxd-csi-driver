@@ -275,6 +275,28 @@ func (pvc PersistentVolumeClaim) WaitCondition(ctx context.Context, conditionTyp
 	gomega.Eventually(isCondMet).WithContext(ctx).Should(gomega.BeTrue(), "PVC %q condition %q did not reach %q\n%s", pvc.PrettyName(), conditionType, conditionStatus, pvc.StateString(ctx))
 }
 
+// WaitEvent waits until an event with the given reason and a message containing
+// the given text is recorded for the PersistentVolumeClaim.
+func (pvc PersistentVolumeClaim) WaitEvent(ctx context.Context, reason string, substring string) {
+	ginkgo.By("Wait for PersistentVolumeClaim " + pvc.PrettyName() + " event " + reason)
+	hasEvent := func(ctx context.Context) bool {
+		events, err := pvc.Events(ctx)
+		if err != nil {
+			return false
+		}
+
+		for _, e := range events.Items {
+			if e.Reason == reason && strings.Contains(e.Message, substring) {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	gomega.Eventually(hasEvent).WithContext(ctx).Should(gomega.BeTrue(), "PVC %q has no event %q containing %q\n%s", pvc.PrettyName(), reason, substring, pvc.StateString(ctx))
+}
+
 // WaitGone waits until the PVC is no longer present in the Kubernetes cluster.
 func (pvc PersistentVolumeClaim) WaitGone(ctx context.Context) {
 	ginkgo.By("Wait for PersistentVolumeClaim " + pvc.PrettyName() + " to be gone")

@@ -98,6 +98,30 @@ func IsMountPoint(path string) (bool, error) {
 	return mounted, nil
 }
 
+// CheckMountOptions returns an error if the mount entry for the path lacks any of the
+// given per-mount options.
+func CheckMountOptions(path string, options []string) error {
+	mountinfo, err := filesystem.GetMountinfo(path)
+	if err != nil {
+		return err
+	}
+
+	// The per-mount options are the sixth field of the mountinfo entry.
+	if len(mountinfo) < 6 {
+		return fmt.Errorf("Invalid mountinfo entry for path %q", path)
+	}
+
+	curOptions := strings.Split(mountinfo[5], ",")
+
+	for _, option := range options {
+		if !slices.Contains(curOptions, option) {
+			return fmt.Errorf("Mount %q does not have option %q", path, option)
+		}
+	}
+
+	return nil
+}
+
 // Mount mounts a volume to a target path.
 func Mount(sourcePath string, targetPath string, contentType string, mountOptions []string) error {
 	if sourcePath == "" {
