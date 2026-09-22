@@ -101,7 +101,7 @@ func IsMountPoint(path string) (bool, error) {
 // CheckMountOptions returns an error if the mount entry for the path lacks any of the
 // given per-mount options.
 func CheckMountOptions(path string, options []string) error {
-	mountinfo, err := filesystem.GetMountinfo(path)
+	mountinfo, err := filesystem.GetMountinfo("/proc/self/mountinfo", path)
 	if err != nil {
 		return err
 	}
