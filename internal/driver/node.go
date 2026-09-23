@@ -117,7 +117,7 @@ func (n *nodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 // NodePublishVolume mounts a filesystem volume or maps a block volume into the pod’s
 // target path on this node.
 func (n *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	err := ValidateVolumeCapabilities(req.VolumeCapability)
+	err := ValidateVolumeCapabilities(req.VolumeContext[ParameterStorageDriver], req.VolumeCapability)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "NodePublishVolume: %v", err)
 	}

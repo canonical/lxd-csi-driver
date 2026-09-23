@@ -32,6 +32,7 @@ func newVolumeCapability(mode csi.VolumeCapability_AccessMode_Mode, block bool) 
 func TestValidateVolumeCapabilities(t *testing.T) {
 	tests := []struct {
 		Name               string
+		StorageDriver      string
 		VolumeCapabilities []*csi.VolumeCapability
 		expectError        string
 	}{
@@ -136,7 +137,7 @@ func TestValidateVolumeCapabilities(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			err := ValidateVolumeCapabilities(test.VolumeCapabilities...)
+			err := ValidateVolumeCapabilities(test.StorageDriver, test.VolumeCapabilities...)
 			if test.expectError == "" {
 				require.NoError(t, err, "Expected no error, got %v", err)
 			} else {

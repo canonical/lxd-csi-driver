@@ -23,7 +23,18 @@ func TestCreateVolumeRejectsUnsupportedAccessMode(t *testing.T) {
 		nodeID:   "test-node",
 	}
 
-	d.devLXD = &devlxd.FakeServer{}
+	d.devLXD = &devlxd.FakeServer{
+		GetPoolFunc: func(pool string) (*api.DevLXDStoragePool, string, error) {
+			return &api.DevLXDStoragePool{Name: pool, Driver: "dir"}, "", nil
+		},
+		GetStateFunc: func() (*api.DevLXDGet, error) {
+			return &api.DevLXDGet{
+				DevLXDGetUntrusted: api.DevLXDGetUntrusted{
+					SupportedStorageDrivers: []api.DevLXDServerStorageDriverInfo{{Name: "dir"}},
+				},
+			}, nil
+		},
+	}
 
 	controller := NewControllerServer(d)
 
@@ -260,6 +271,13 @@ func TestControllerExpandVolumePreservesConfig(t *testing.T) {
 	}
 
 	fakeClient := &devlxd.FakeServer{
+		GetPoolFunc: func(pool string) (*api.DevLXDStoragePool, string, error) {
+			require.Equal(t, "remote", pool)
+			return &api.DevLXDStoragePool{
+				Name:   pool,
+				Driver: "ceph",
+			}, "", nil
+		},
 		GetVolFunc: func(pool string, volType string, name string) (*api.DevLXDStorageVolume, string, error) {
 			calledGet = true
 			require.Equal(t, "remote", pool)

@@ -67,11 +67,6 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	contentSource := req.VolumeContentSource
 
-	err = ValidateVolumeCapabilities(req.VolumeCapabilities...)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: %v", err)
-	}
-
 	contentType := ParseContentType(req.VolumeCapabilities...)
 	if contentType == "" {
 		return nil, status.Error(codes.InvalidArgument, "CreateVolume: Volume capability must specify either block or filesystem access type")
@@ -130,6 +125,11 @@ func (c *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolu
 
 	if driver == nil || driver.Name == "cephobject" {
 		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: CSI does not support storage driver %q", pool.Driver)
+	}
+
+	err = ValidateVolumeCapabilities(driver.Name, req.VolumeCapabilities...)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "CreateVolume: %v", err)
 	}
 
 	// Reject request for immediate binding of local volumes.
@@ -545,7 +545,7 @@ func (c *controllerServer) ControllerPublishVolume(ctx context.Context, req *csi
 		client = client.UseTarget(target)
 	}
 
-	err = ValidateVolumeCapabilities(req.VolumeCapability)
+	err = ValidateVolumeCapabilities(req.VolumeContext[ParameterStorageDriver], req.VolumeCapability)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "ControllerPublishVolume: %v", err)
 	}
@@ -686,7 +686,12 @@ func (c *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.
 		client = client.UseTarget(target)
 	}
 
-	err = ValidateVolumeCapabilities(req.VolumeCapability)
+	pool, _, err := client.GetStoragePool(poolName)
+	if err != nil {
+		return nil, status.Errorf(lxderrors.ToGRPCCode(err), "ExpandVolume: Failed to retrieve storage pool %q: %v", poolName, err)
+	}
+
+	err = ValidateVolumeCapabilities(pool.Driver, req.VolumeCapability)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "ExpandVolume: %v", err)
 	}
