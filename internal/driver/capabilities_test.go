@@ -97,11 +97,12 @@ func TestValidateVolumeCapabilities(t *testing.T) {
 			expectError: `Access mode "99" is not supported`,
 		},
 		{
-			Name: "Ensure multi node multi writer is rejected",
+			Name:          "Ensure multi node multi writer is rejected on dir driver",
+			StorageDriver: "dir",
 			VolumeCapabilities: []*csi.VolumeCapability{
 				newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER, false),
 			},
-			expectError: `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`,
+			expectError: `Access mode "MULTI_NODE_MULTI_WRITER" is not supported by storage driver "dir"`,
 		},
 		{
 			Name: "Ensure multi node single writer is rejected",
@@ -111,19 +112,38 @@ func TestValidateVolumeCapabilities(t *testing.T) {
 			expectError: `Access mode "MULTI_NODE_SINGLE_WRITER" is not supported`,
 		},
 		{
-			Name: "Ensure multi node reader only is rejected",
+			Name:          "Ensure multi node reader only is rejected on dir driver",
+			StorageDriver: "dir",
 			VolumeCapabilities: []*csi.VolumeCapability{
 				newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY, false),
 			},
-			expectError: `Access mode "MULTI_NODE_READER_ONLY" is not supported`,
+			expectError: `Access mode "MULTI_NODE_READER_ONLY" is not supported by storage driver "dir"`,
 		},
 		{
-			Name: "Ensure any multi node capability is rejected",
+			Name:          "Ensure any multi node capability is rejected on dir driver",
+			StorageDriver: "dir",
 			VolumeCapabilities: []*csi.VolumeCapability{
 				newVolumeCapability(csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER, false),
 				newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER, false),
 			},
-			expectError: `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`,
+			expectError: `Access mode "MULTI_NODE_MULTI_WRITER" is not supported by storage driver "dir"`,
+		},
+		{
+			Name:          "Ensure multi node access modes are accepted on cephfs driver",
+			StorageDriver: "cephfs",
+			VolumeCapabilities: []*csi.VolumeCapability{
+				newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER, false),
+				newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY, false),
+			},
+			expectError: "",
+		},
+		{
+			Name:          "Ensure multi node multi writer is rejected for block volume on cephfs driver",
+			StorageDriver: "cephfs",
+			VolumeCapabilities: []*csi.VolumeCapability{
+				newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER, true),
+			},
+			expectError: `Access mode "MULTI_NODE_MULTI_WRITER" is not supported for block volumes`,
 		},
 		{
 			Name: "Ensure nil capability is rejected",

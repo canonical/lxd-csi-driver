@@ -25,12 +25,15 @@ func TestNodePublishVolumeRejectsUnsupportedAccessMode(t *testing.T) {
 		VolumeId:         "local/pvc-volume-name",
 		TargetPath:       "/var/lib/kubelet/pods/test/volumes/target",
 		VolumeCapability: newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER, false),
+		VolumeContext: map[string]string{
+			ParameterStorageDriver: "dir",
+		},
 	}
 
 	resp, err := node.NodePublishVolume(context.Background(), req)
 	require.Nil(t, resp)
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
-	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`)
+	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported by storage driver "dir"`)
 }
 
 func TestNodePublishVolumeExistingMount(t *testing.T) {
