@@ -235,4 +235,4 @@ var _ = ginkgo.DescribeTableSubtree("[Volume stats]", func(driver string) {
 		},
 		ginkgo.SpecTimeout(10*time.Minute),
 	)
-}, getTestLXDStorageDrivers())
+}, getTestLXDStorageDrivers(), ginkgo.Label("stats"))
