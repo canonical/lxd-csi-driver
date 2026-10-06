@@ -30,7 +30,7 @@ runs:
   using: composite
   steps:
     - name: Setup LXD
-      uses: canonical/setup-lxd@da2ac84e727dc534215fd14cd088b9209d65893b # main
+      uses: canonical/setup-lxd@e3ef25fc529b40aa403b264cdf44e7882b361164
       with:
         channel: ${{ inputs.lxd-snap-channel }}
         bridges: "lxdbr0,clsbr0"
