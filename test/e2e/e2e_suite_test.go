@@ -455,7 +455,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume release]", func(driver string) {
 	)
 }, getTestLXDStorageDrivers())
 
-var _ = ginkgo.DescribeTableSubtree("[Volume access mode] ", func(driver string) {
+var _ = ginkgo.DescribeTableSubtree("[Volume access mode]", func(driver string) {
 	var cfg *rest.Config
 	var namespace = "default"
 
