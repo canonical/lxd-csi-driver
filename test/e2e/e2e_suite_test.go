@@ -187,12 +187,12 @@ var _ = ginkgo.DescribeTableSubtree("[Volume binding mode]", func(driver string)
 			sc := specs.NewStorageClass(cfg, "sc", poolName).
 				WithVolumeBindingMode(storagev1.VolumeBindingImmediate)
 			sc.Create(ctx)
-			defer sc.ForceDelete(ctx)
+			defer sc.ForceDelete(context.Background())
 
 			// Create FS PVC.
 			pvc := specs.NewPersistentVolumeClaim(cfg, "pvc", namespace).WithStorageClassName(sc.Name)
 			pvc.Create(ctx)
-			defer pvc.ForceDelete(ctx)
+			defer pvc.ForceDelete(context.Background())
 
 			// Ensure the pod is running and both PVCs are bound.
 			pvc.WaitBound(ctx)
@@ -200,7 +200,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume binding mode]", func(driver string)
 			// Create a pod that uses the PVC.
 			pod := specs.NewPod(cfg, "pod", namespace).WithPVC(pvc, "/mnt/test")
 			pod.Create(ctx)
-			defer pod.ForceDelete(ctx)
+			defer pod.ForceDelete(context.Background())
 
 			// Ensure the pod is running.
 			pod.WaitReady(ctx)
