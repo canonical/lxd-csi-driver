@@ -134,4 +134,4 @@ var _ = ginkgo.DescribeTableSubtree("[Volume binding mode]", func(driver string)
 		},
 		ginkgo.SpecTimeout(5*time.Minute),
 	)
-}, getTestLXDStorageDrivers())
+}, getTestLXDStorageDrivers(), ginkgo.Label("binding-mode"))

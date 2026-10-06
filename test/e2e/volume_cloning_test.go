@@ -153,4 +153,4 @@ var _ = ginkgo.DescribeTableSubtree("[Volume cloning]", func(driver string) {
 		},
 		ginkgo.SpecTimeout(5*time.Minute),
 	)
-}, getTestLXDStorageDrivers())
+}, getTestLXDStorageDrivers(), ginkgo.Label("cloning"))

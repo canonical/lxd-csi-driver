@@ -165,4 +165,4 @@ var _ = ginkgo.DescribeTableSubtree("[Volume read/write]", func(driver string) {
 		},
 		ginkgo.SpecTimeout(5*time.Minute),
 	)
-}, getTestLXDStorageDrivers())
+}, getTestLXDStorageDrivers(), ginkgo.Label("read-write"))
