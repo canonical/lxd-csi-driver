@@ -390,15 +390,6 @@ var _ = ginkgo.DescribeTableSubtree("[Volume read/write]", func(driver string) {
 		},
 		ginkgo.SpecTimeout(5*time.Minute),
 	)
-}, getTestLXDStorageDrivers())
-
-var _ = ginkgo.DescribeTableSubtree("[Volume release]", func(driver string) {
-	var cfg *rest.Config
-	var namespace = "default"
-
-	ginkgo.BeforeEach(func() {
-		cfg = testutils.GetClientConfig()
-	})
 
 	ginkgo.It("Volume data should be retained when only pod is recreated",
 		func(ctx ginkgo.SpecContext) {
