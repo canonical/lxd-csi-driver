@@ -57,7 +57,7 @@ jobs:
           sudo snap install kubectl --classic
 
       - name: Setup LXD
-        uses: canonical/setup-lxd@da2ac84e727dc534215fd14cd088b9209d65893b # main
+        uses: canonical/setup-lxd@e3ef25fc529b40aa403b264cdf44e7882b361164 # main
         with:
           bridges: "lxdbr0,${{ env.K8S_CLUSTER_NAME }}-br0"
           channel: latest/edge
