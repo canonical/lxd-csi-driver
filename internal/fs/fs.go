@@ -302,6 +302,11 @@ func Usage(path string) (Stats, error) {
 		return Stats{}, fmt.Errorf("Failed to get filesystem statistics for %q: %w", path, err)
 	}
 
+	return statsFromStatfs(statfs), nil
+}
+
+// statsFromStatfs converts the raw filesystem statistics into Stats.
+func statsFromStatfs(statfs unix.Statfs_t) Stats {
 	// Block counts are expressed in fragment size (Frsize) units, while Bsize is only the
 	// preferred I/O size, so multiplying by Bsize would misreport capacity when the two
 	// differ. Some filesystems leave Frsize unset, in which case Bsize is the best estimate.
@@ -317,11 +322,16 @@ func Usage(path string) (Stats, error) {
 		TotalBytes:     int64(statfs.Blocks) * blockSize,
 		UsedBytes:      int64(statfs.Blocks-statfs.Bfree) * blockSize,
 		AvailableBytes: int64(statfs.Bavail) * blockSize,
-
-		TotalInodes: int64(statfs.Files),
-		UsedInodes:  int64(statfs.Files - statfs.Ffree),
-		FreeInodes:  int64(statfs.Ffree),
 	}
 
-	return stats, nil
+	// A filesystem that does not track free inodes reports more free inodes than
+	// inodes in total. CephFS reports -1. Its inode usage stays at zero, which is
+	// what btrfs reports as well.
+	if statfs.Ffree <= statfs.Files {
+		stats.TotalInodes = int64(statfs.Files)
+		stats.UsedInodes = int64(statfs.Files - statfs.Ffree)
+		stats.FreeInodes = int64(statfs.Ffree)
+	}
+
+	return stats
 }
