@@ -67,6 +67,8 @@ var _ = ginkgo.DescribeTableSubtree("[Volume snapshots]", func(driver string) {
 
 	ginkgo.It("Snapshot as volume source",
 		func(ctx ginkgo.SpecContext) {
+			requiresAttachedVolumeUpdates(driver)
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 

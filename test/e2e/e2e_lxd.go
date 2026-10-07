@@ -85,6 +85,16 @@ func requiresSingleNodeVolumes(storageDriver string) {
 	}
 }
 
+// requiresAttachedVolumeUpdates skips the test when LXD cannot update or snapshot a volume
+// that is attached to an instance on another cluster member. LXD updates the backup file
+// of every instance that uses the volume and fails to load the storage pool of an instance
+// on another member. Only multi-node storage drivers attach a volume across members.
+func requiresAttachedVolumeUpdates(storageDriver string) {
+	if getLXDClient().IsClustered() && driver.IsMultiNodeStorageDriver(storageDriver) {
+		ginkgo.Skip("SKIP: Clustered LXD cannot update a " + storageDriver + " volume attached on another cluster member")
+	}
+}
+
 // getTestLXDStorageDrivers returns the list of LXD storage drivers to be used for testing.
 // It reads the TEST_LXD_STORAGE_DRIVERS environment variable, which should contain a comma-separated
 // list of drivers. If the variable is not set, it defaults to ["dir"].

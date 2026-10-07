@@ -27,6 +27,8 @@ var _ = ginkgo.DescribeTableSubtree("[Volume expansion]", func(driver string) {
 				ginkgo.Skip("Skipping volume expansion test for 'dir' driver, as it does not support volume size")
 			}
 
+			requiresAttachedVolumeUpdates(driver)
+
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
 
@@ -105,6 +107,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume expansion]", func(driver string) {
 	ginkgo.It("Fail online block volume expansion and succeed once PVC is detached",
 		func(ctx ginkgo.SpecContext) {
 			requiresResizableBlockVolumes(driver)
+			requiresAttachedVolumeUpdates(driver)
 
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
