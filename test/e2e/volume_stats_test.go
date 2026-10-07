@@ -131,8 +131,9 @@ var _ = ginkgo.DescribeTableSubtree("[Volume stats]", func(driver string) {
 
 			// The inode usage is reported only by filesystems that preallocate the
 			// inodes. Btrfs allocates them dynamically, therefore it reports no
-			// inode counts at all.
-			if driver == "btrfs" {
+			// inode counts at all. CephFS counts objects instead and reports no
+			// free inode count, therefore the driver reports no inode usage for it.
+			if driver == "btrfs" || driver == "cephfs" {
 				gomega.Expect(stats.Inodes).To(gomega.BeZero())
 			} else {
 				gomega.Expect(stats.Inodes).To(gomega.BeNumerically(">", 0))
@@ -144,11 +145,13 @@ var _ = ginkgo.DescribeTableSubtree("[Volume stats]", func(driver string) {
 			// capacity does not have to match the total capacity.
 			gomega.Expect(stats.UsedBytes + stats.AvailableBytes).To(gomega.BeNumerically("<=", stats.CapacityBytes))
 
-			if driver == "dir" {
+			if driver == "dir" || driver == "cephfs" {
 				// The "dir" storage driver cannot bound the volume size, as the volume
-				// is a plain directory on the host filesystem. Therefore the reported
-				// capacity belongs to the filesystem that backs the storage pool and
-				// no assumptions can be made about the reported values.
+				// is a plain directory on the host filesystem. The "cephfs" storage
+				// driver bounds it with a directory quota, which the filesystem
+				// statistics reflect only for the root of the mount. In both cases the
+				// reported capacity belongs to the filesystem that backs the storage
+				// pool and no assumptions can be made about the reported values.
 				return
 			}
 
@@ -191,9 +194,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume stats]", func(driver string) {
 
 	ginkgo.It("Report stats for block volume",
 		func(ctx ginkgo.SpecContext) {
-			if driver == "dir" {
-				ginkgo.Skip("Skipping block volume stats test for 'dir' driver, as it does not support volume size")
-			}
+			requiresResizableBlockVolumes(driver)
 
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()

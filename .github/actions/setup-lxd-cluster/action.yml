@@ -25,6 +25,14 @@ inputs:
     options:
       - dir
       - zfs
+  microceph-enable:
+    description: |
+      Deploy a dedicated MicroCeph instance and configure cluster members
+      to use it for Ceph-backed storage pools.
+    default: 'false'
+  microceph-snap-channel:
+    description: Snap channel to use for installing MicroCeph on the dedicated instance.
+    default: latest/edge
 
 runs:
   using: composite
@@ -48,3 +56,5 @@ runs:
         INSTANCE_IMAGE: ubuntu-minimal-daily:24.04
         VERSION_LXD: ${{ inputs.lxd-snap-channel }}
         STORAGE_DRIVER: ${{ inputs.storage-driver }}
+        MICROCEPH_ENABLED: ${{ inputs.microceph-enable }}
+        VERSION_MICROCEPH: ${{ inputs.microceph-snap-channel }}

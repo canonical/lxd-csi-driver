@@ -23,7 +23,18 @@ func TestCreateVolumeRejectsUnsupportedAccessMode(t *testing.T) {
 		nodeID:   "test-node",
 	}
 
-	d.devLXD = &devlxd.FakeServer{}
+	d.devLXD = &devlxd.FakeServer{
+		GetPoolFunc: func(pool string) (*api.DevLXDStoragePool, string, error) {
+			return &api.DevLXDStoragePool{Name: pool, Driver: "dir"}, "", nil
+		},
+		GetStateFunc: func() (*api.DevLXDGet, error) {
+			return &api.DevLXDGet{
+				DevLXDGetUntrusted: api.DevLXDGetUntrusted{
+					SupportedStorageDrivers: []api.DevLXDServerStorageDriverInfo{{Name: "dir"}},
+				},
+			}, nil
+		},
+	}
 
 	controller := NewControllerServer(d)
 
@@ -43,7 +54,68 @@ func TestCreateVolumeRejectsUnsupportedAccessMode(t *testing.T) {
 	resp, err := controller.CreateVolume(context.Background(), req)
 	require.Nil(t, resp)
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
-	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`)
+	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported by storage driver "dir"`)
+}
+
+func TestCreateVolumeMultiNodeAccessMode(t *testing.T) {
+	d := &Driver{
+		name:     "lxd.csi.canonical.com",
+		version:  "test",
+		endpoint: "unix:///csi/csi.sock",
+		nodeID:   "test-node",
+	}
+
+	var calledCreate bool
+	d.devLXD = &devlxd.FakeServer{
+		GetPoolFunc: func(pool string) (*api.DevLXDStoragePool, string, error) {
+			return &api.DevLXDStoragePool{Name: pool, Driver: "cephfs"}, "", nil
+		},
+		GetStateFunc: func() (*api.DevLXDGet, error) {
+			return &api.DevLXDGet{
+				DevLXDGetUntrusted: api.DevLXDGetUntrusted{
+					SupportedStorageDrivers: []api.DevLXDServerStorageDriverInfo{{Name: "cephfs", Remote: true}},
+				},
+			}, nil
+		},
+		CreateVolFunc: func(pool string, volume api.DevLXDStorageVolumesPost) (lxdClient.DevLXDOperation, error) {
+			calledCreate = true
+			require.Equal(t, "pool", pool)
+			require.Equal(t, "filesystem", volume.ContentType)
+			return &devlxd.FakeOperation{}, nil
+		},
+	}
+
+	controller := NewControllerServer(d)
+
+	req := &csi.CreateVolumeRequest{
+		Name: "pvc-8722b28c-a1b2-c3d4-e5f6-a7b8c9d0e1f2",
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: 67108864, // 64Mi
+		},
+		VolumeCapabilities: []*csi.VolumeCapability{
+			newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER, false),
+		},
+		Parameters: map[string]string{
+			ParameterStoragePool: "pool",
+		},
+		AccessibilityRequirements: &csi.TopologyRequirement{
+			Preferred: []*csi.Topology{
+				{Segments: map[string]string{AnnotationLXDClusterMember: "member-1"}},
+			},
+		},
+	}
+
+	resp, err := controller.CreateVolume(context.Background(), req)
+	require.NoError(t, err)
+	require.True(t, calledCreate, "CreateStoragePoolVolume should have been called")
+
+	// ControllerPublishVolume and NodePublishVolume validate the access mode against
+	// the storage driver that CreateVolume returns in the volume context.
+	require.Equal(t, "cephfs", resp.Volume.VolumeContext[ParameterStorageDriver])
+
+	// The request prefers the cluster member "member-1". A volume restricted to that
+	// member's topology cannot be used by pods on nodes of other cluster members.
+	require.Empty(t, resp.Volume.AccessibleTopology)
 }
 
 func TestControllerPublishVolumeRejectsUnsupportedAccessMode(t *testing.T) {
@@ -62,17 +134,21 @@ func TestControllerPublishVolumeRejectsUnsupportedAccessMode(t *testing.T) {
 		VolumeId:         "pool/pvc-volume-name",
 		NodeId:           "test-node",
 		VolumeCapability: newVolumeCapability(csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER, false),
+		VolumeContext: map[string]string{
+			ParameterStorageDriver: "dir",
+		},
 	}
 
 	resp, err := controller.ControllerPublishVolume(context.Background(), req)
 	require.Nil(t, resp)
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
-	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported`)
+	require.ErrorContains(t, err, `Access mode "MULTI_NODE_MULTI_WRITER" is not supported by storage driver "dir"`)
 }
 
 func TestControllerPublishVolumeReadonly(t *testing.T) {
 	tests := []struct {
 		Name           string
+		StorageDriver  string
 		AccessMode     csi.VolumeCapability_AccessMode_Mode
 		Readonly       bool
 		expectReadonly string
@@ -92,6 +168,20 @@ func TestControllerPublishVolumeReadonly(t *testing.T) {
 		{
 			Name:           "Ensure single node reader only volume is attached read-only",
 			AccessMode:     csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+			Readonly:       false,
+			expectReadonly: "true",
+		},
+		{
+			Name:           "Ensure multi node multi writer volume is attached read-write on cephfs driver",
+			StorageDriver:  "cephfs",
+			AccessMode:     csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
+			Readonly:       false,
+			expectReadonly: "",
+		},
+		{
+			Name:           "Ensure multi node reader only volume is attached read-only on cephfs driver",
+			StorageDriver:  "cephfs",
+			AccessMode:     csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
 			Readonly:       false,
 			expectReadonly: "true",
 		},
@@ -125,6 +215,9 @@ func TestControllerPublishVolumeReadonly(t *testing.T) {
 				NodeId:           "test-node",
 				VolumeCapability: newVolumeCapability(test.AccessMode, false),
 				Readonly:         test.Readonly,
+				VolumeContext: map[string]string{
+					ParameterStorageDriver: test.StorageDriver,
+				},
 			}
 
 			resp, err := controller.ControllerPublishVolume(context.Background(), req)
@@ -260,6 +353,13 @@ func TestControllerExpandVolumePreservesConfig(t *testing.T) {
 	}
 
 	fakeClient := &devlxd.FakeServer{
+		GetPoolFunc: func(pool string) (*api.DevLXDStoragePool, string, error) {
+			require.Equal(t, "remote", pool)
+			return &api.DevLXDStoragePool{
+				Name:   pool,
+				Driver: "ceph",
+			}, "", nil
+		},
 		GetVolFunc: func(pool string, volType string, name string) (*api.DevLXDStorageVolume, string, error) {
 			calledGet = true
 			require.Equal(t, "remote", pool)

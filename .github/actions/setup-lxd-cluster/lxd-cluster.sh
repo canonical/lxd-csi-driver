@@ -24,12 +24,20 @@ INSTANCE_TYPE="${INSTANCE_TYPE:-container}"
 # Version of LXD to install.
 VERSION_LXD="${VERSION_LXD:-latest/edge}"
 
+# Whether to deploy a dedicated MicroCeph instance and configure cluster
+# members to use it for Ceph-backed storage pools.
+MICROCEPH_ENABLED="${MICROCEPH_ENABLED:-false}"
+
+# Version of MicroCeph to install on the dedicated MicroCeph instance.
+VERSION_MICROCEPH="${VERSION_MICROCEPH:-latest/edge}"
+
 # Other.
 INSTANCE="${CLUSTER_NAME}"
 LEADER="${CLUSTER_NAME}-1"
 STORAGE_POOL="${CLUSTER_NAME}-pool"
 STORAGE_DRIVER="${STORAGE_DRIVER:-dir}"
 NETWORK_NAME="${CLUSTER_NAME}br0"
+MICROCEPH_INSTANCE="${CLUSTER_NAME}-ceph"
 
 # Private GitHub runners currently are 2 vCPU / 8GiB systems; reduce instance
 # sizing to fit those limits while leaving the default values intact elsewhere.
@@ -111,11 +119,12 @@ deploy() {
     fi
 
     # Create container profile capable of running VMs.
+    local kernelModules="kvm,vhost_net,vhost_vsock"
     if ! lxc profile show container-kvm &>/dev/null; then
         lxc profile create container-kvm << EOF
 description: Makes containers capable of running VMs
 config:
-  linux.kernel_modules: kvm,vhost_net,vhost_vsock
+  linux.kernel_modules: ${kernelModules}
   security.devlxd.images: "true"
   security.nesting: "true"
 devices:
@@ -159,6 +168,11 @@ EOF
         if [ "${INSTANCE_TYPE}" = "virtual-machine" ]; then
             args=(--vm)
             ifName="enp5s0"
+        elif [ "${MICROCEPH_ENABLED}" = "true" ]; then
+            # Mounting CephFS requires CAP_SYS_ADMIN in the initial user namespace,
+            # which unprivileged containers do not have. LXD loads the ceph kernel
+            # module on the host, as containers cannot load it themselves.
+            args+=(--config security.privileged=true --config "linux.kernel_modules=${kernelModules},ceph")
         fi
 
         echo "Creating instance ${instance} ..."
@@ -194,12 +208,52 @@ EOF
         fi
     done
 
+    # Setup dedicated MicroCeph instance.
+    if [ "${MICROCEPH_ENABLED}" = "true" ]; then
+        instance="${MICROCEPH_INSTANCE}"
+
+        local state
+        state=$(lxc list --format csv --columns s "${instance}")
+
+        case "${state}" in
+        "RUNNING")
+            echo "Instance ${instance} already running."
+            ;;
+        "STOPPED")
+            echo "Starting instance ${instance}..."
+            lxc start "${instance}"
+            ;;
+        *)
+            echo "Creating instance ${instance} ..."
+            lxc launch "${INSTANCE_IMAGE}" "${instance}" \
+                --storage "${STORAGE_POOL}" \
+                --network "${NETWORK_NAME}" \
+                --config limits.cpu=2 \
+                --config limits.memory=2GiB \
+                --vm
+            ;;
+        esac
+    fi
+
     # Wait for instances to become ready.
     for i in $(seq 1 "${CLUSTER_SIZE}"); do
         instance="${INSTANCE}-${i}"
         waitInstanceReady "${instance}"
+
+        if [ "${INSTANCE_TYPE}" = "container" ] && [ "${MICROCEPH_ENABLED}" = "true" ]; then
+            # Privileged containers cannot mount binfmt_misc. The systemd-binfmt unit
+            # fails there and leaves the system degraded.
+            lxc exec "${instance}" -- systemctl mask --now systemd-binfmt.service
+            lxc exec "${instance}" -- systemctl reset-failed systemd-binfmt.service
+        fi
+
         lxc exec "${instance}" -- systemctl is-system-running --wait
     done
+
+    if [ "${MICROCEPH_ENABLED}" = "true" ]; then
+        waitInstanceReady "${MICROCEPH_INSTANCE}"
+        lxc exec "${MICROCEPH_INSTANCE}" -- systemctl is-system-running --wait
+    fi
 
     # Install LXD on VMs.
     for i in $(seq 1 "${CLUSTER_SIZE}"); do
@@ -294,6 +348,8 @@ EOF
         lxc exec "${LEADER}" -- lxc profile device add default eth0 nic nictype=bridged parent=lxdbr0
     fi
 
+    configure_microceph
+
     # Configure new cluster remote.
     token=$(lxc exec "${LEADER}" -- lxc config trust add --name host --quiet)
     ipv4=$(instanceIPv4 "${LEADER}")
@@ -306,6 +362,93 @@ EOF
     lxc cluster list "${CLUSTER_NAME}:"
 }
 
+# configure_microceph installs and bootstraps MicroCeph on the dedicated instance.
+# It copies the Ceph client configuration and keyring to every cluster member.
+configure_microceph() {
+    if [ "${MICROCEPH_ENABLED}" != "true" ]; then
+        echo "MicroCeph setup disabled."
+        return
+    fi
+
+    local microceph="${MICROCEPH_INSTANCE}"
+    local instance
+
+    echo "Installing and configuring MicroCeph on ${microceph} ..."
+    lxc exec "${microceph}" -- snap install microceph --channel="${VERSION_MICROCEPH}"
+
+    # Create a loop device backed by a sparse file to use as the OSD disk.
+    local loopDevice
+    loopDevice=$(lxc exec "${microceph}" -- sh -c '
+        truncate -s 10G /root/microceph.img
+        losetup --show -f /root/microceph.img
+    ')
+
+    if [ -z "${loopDevice}" ]; then
+        echo "Error: Failed to create loop device for MicroCeph OSD disk" >&2
+        return 1
+    fi
+
+    lxc exec "${microceph}" -- microceph cluster bootstrap
+    lxc exec "${microceph}" -- microceph.ceph config set global mon_allow_pool_size_one true
+    lxc exec "${microceph}" -- microceph.ceph config set global mon_allow_pool_delete true
+    lxc exec "${microceph}" -- microceph.ceph config set global osd_pool_default_size 1
+    lxc exec "${microceph}" -- microceph.ceph config set global osd_memory_target 939524096 # 896MiB = 768MiB (osd_memory_base) + 128MiB (osd_memory_cache_min)
+    lxc exec "${microceph}" -- microceph.ceph osd crush rule rm replicated_rule
+    lxc exec "${microceph}" -- microceph.ceph osd crush rule create-replicated replicated default osd
+
+    local flag
+    for flag in nosnaptrim nobackfill norebalance norecover noscrub nodeep-scrub; do
+        lxc exec "${microceph}" -- microceph.ceph osd set "${flag}"
+    done
+
+    lxc exec "${microceph}" -- microceph disk add --wipe "${loopDevice}"
+
+    # Create CephFS file system.
+    lxc exec "${microceph}" -- microceph.ceph osd pool create cephfs_meta 32
+    lxc exec "${microceph}" -- microceph.ceph osd pool create cephfs_data 32
+    lxc exec "${microceph}" -- microceph.ceph fs new cephfs cephfs_meta cephfs_data
+
+    echo "Waiting for MicroCeph on ${microceph} to become ready ..."
+    local j
+    local pgStat
+    for j in $(seq 1 60); do
+        if ! pgStat=$(lxc exec "${microceph}" -- microceph.ceph pg stat 2>/dev/null); then
+            pgStat=""
+        fi
+
+        if [ -n "${pgStat}" ] && ! echo "${pgStat}" | grep -wq unknown; then
+            echo "MicroCeph on ${microceph} ready after ${j} seconds."
+            break
+        fi
+
+        if [ "${j}" -ge 60 ]; then
+            echo "Error: MicroCeph on ${microceph} still has unknown placement groups after 60 seconds!" >&2
+            lxc exec "${microceph}" -- microceph.ceph status || true
+            return 1
+        fi
+
+        sleep 1
+    done
+
+    lxc exec "${microceph}" -- microceph.ceph status
+
+    # Distribute the Ceph client configuration and keyring to every cluster member.
+    # Pull the files from the MicroCeph snap directory, as symlinking it to /etc/ceph
+    # breaks the snap mount namespace on the next boot.
+    local cephDir
+    cephDir=$(mktemp -d)
+    lxc file pull "${microceph}/var/snap/microceph/current/conf/ceph.conf" "${cephDir}/ceph.conf"
+    lxc file pull "${microceph}/var/snap/microceph/current/conf/ceph.client.admin.keyring" "${cephDir}/ceph.client.admin.keyring"
+
+    for i in $(seq 1 "${CLUSTER_SIZE}"); do
+        instance="${INSTANCE}-${i}"
+        lxc exec "${instance}" -- mkdir -p /etc/ceph
+        lxc file push --quiet "${cephDir}/ceph.conf" "${instance}/etc/ceph/ceph.conf"
+        lxc file push --quiet "${cephDir}/ceph.client.admin.keyring" "${instance}/etc/ceph/ceph.client.admin.keyring"
+    done
+
+    rm -rf "${cephDir}"
+}
 
 #================================================
 # Cleanup

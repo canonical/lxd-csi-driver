@@ -8,6 +8,7 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
+	"github.com/canonical/lxd-csi-driver/internal/driver"
 	"github.com/canonical/lxd-csi-driver/test/testutils"
 	lxd "github.com/canonical/lxd/client"
 	lxdConfig "github.com/canonical/lxd/lxc/config"
@@ -57,6 +58,43 @@ func requiresStandaloneLXD() {
 	}
 }
 
+// requiresResizableBlockVolumes skips the test when the given LXD storage driver
+// does not support block volumes or volume size.
+func requiresResizableBlockVolumes(storageDriver string) {
+	switch storageDriver {
+	case "dir":
+		ginkgo.Skip("SKIP: Driver dir does not support volume size")
+	case "cephfs":
+		ginkgo.Skip("SKIP: Driver cephfs does not support block volumes")
+	}
+}
+
+// requiresMultiNodeVolumes skips the test when the given LXD storage driver does not
+// support attaching a volume to multiple nodes at once.
+func requiresMultiNodeVolumes(storageDriver string) {
+	if !driver.IsMultiNodeStorageDriver(storageDriver) {
+		ginkgo.Skip("SKIP: Driver " + storageDriver + " does not support multi-node volumes")
+	}
+}
+
+// requiresSingleNodeVolumes skips the test when the given LXD storage driver
+// supports attaching a volume to multiple nodes at once.
+func requiresSingleNodeVolumes(storageDriver string) {
+	if driver.IsMultiNodeStorageDriver(storageDriver) {
+		ginkgo.Skip("SKIP: Driver " + storageDriver + " supports multi-node volumes")
+	}
+}
+
+// requiresAttachedVolumeUpdates skips the test when LXD cannot update or snapshot a volume
+// that is attached to an instance on another cluster member. LXD updates the backup file
+// of every instance that uses the volume and fails to load the storage pool of an instance
+// on another member. Only multi-node storage drivers attach a volume across members.
+func requiresAttachedVolumeUpdates(storageDriver string) {
+	if getLXDClient().IsClustered() && driver.IsMultiNodeStorageDriver(storageDriver) {
+		ginkgo.Skip("SKIP: Clustered LXD cannot update a " + storageDriver + " volume attached on another cluster member")
+	}
+}
+
 // getTestLXDStorageDrivers returns the list of LXD storage drivers to be used for testing.
 // It reads the TEST_LXD_STORAGE_DRIVERS environment variable, which should contain a comma-separated
 // list of drivers. If the variable is not set, it defaults to ["dir"].
@@ -87,8 +125,9 @@ func getTestLXDStorageDrivers() []ginkgo.TableEntry {
 func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 	lxdClient := getLXDClient()
 
-	if lxdClient.IsClustered() {
+	if lxdClient.IsClustered() && driver != "cephfs" {
 		// XXX: Clustered LXD is tested only with the default storage pool.
+		// The exception is cephfs, for which the test creates a cluster-wide pool.
 		return defaultClusteredStoragePool, func() {}
 	}
 
@@ -96,12 +135,21 @@ func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 
 	config := make(map[string]string)
 	if driver != "dir" {
-		config["size"] = "512MiB"
 		config["volume.size"] = "128MiB"
+	}
+
+	// Pool size is not configurable for dir and cephfs pools.
+	if driver != "dir" && driver != "cephfs" {
+		config["size"] = "512MiB"
 	}
 
 	if driver == "lvm" {
 		config["lvm.use_thinpool"] = "false"
+	}
+
+	if driver == "cephfs" {
+		// Each pool uses its own directory within the "cephfs" file system.
+		config["cephfs.path"] = "cephfs/" + poolName
 	}
 
 	req := api.StoragePoolsPost{
@@ -111,6 +159,26 @@ func getTestLXDStoragePool(driver string) (poolName string, cleanup func()) {
 			Config:      config,
 			Description: "LXD CSI Driver E2E Test Storage Pool",
 		},
+	}
+
+	if lxdClient.IsClustered() {
+		// Create the pool on each cluster member before creating it cluster-wide.
+		members, err := lxdClient.GetClusterMemberNames()
+		gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to list LXD cluster members: %v", err)
+
+		for _, member := range members {
+			memberReq := api.StoragePoolsPost{
+				Name:   poolName,
+				Driver: driver,
+			}
+
+			op, err := lxdClient.UseTarget(member).CreateStoragePool(memberReq)
+			if err == nil {
+				err = op.Wait()
+			}
+
+			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create storage pool %q with driver %q on cluster member %q: %v", req.Name, req.Driver, member, err)
+		}
 	}
 
 	op, err := lxdClient.CreateStoragePool(req)

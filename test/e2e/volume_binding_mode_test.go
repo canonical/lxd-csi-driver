@@ -90,9 +90,7 @@ var _ = ginkgo.DescribeTableSubtree("[Volume binding mode]", func(driver string)
 
 	ginkgo.It("Create a pod with block and FS volumes",
 		func(ctx ginkgo.SpecContext) {
-			if driver == "dir" {
-				ginkgo.Skip("Skipping volume expansion test for 'dir' driver, as it does not support volume size")
-			}
+			requiresResizableBlockVolumes(driver)
 
 			poolName, cleanup := getTestLXDStoragePool(driver)
 			defer cleanup()
