@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
 
 // Usage of an existing path. Exact values depend on the filesystem the test is
@@ -40,6 +41,26 @@ func Test_Usage(t *testing.T) {
 func Test_Usage_NotFound(t *testing.T) {
 	_, err := Usage(filepath.Join(t.TempDir(), "non-existing"))
 	require.Error(t, err)
+}
+
+// A filesystem that reports more free inodes than inodes in total, such as CephFS
+// with its -1 free inodes, must report no inode usage.
+func Test_statsFromStatfs_NoFreeInodes(t *testing.T) {
+	stats := statsFromStatfs(unix.Statfs_t{
+		Bsize:  4096,
+		Blocks: 100,
+		Bfree:  60,
+		Bavail: 50,
+		Files:  42,
+		Ffree:  ^uint64(0),
+	})
+
+	require.Equal(t, int64(100*4096), stats.TotalBytes)
+	require.Equal(t, int64(40*4096), stats.UsedBytes)
+	require.Equal(t, int64(50*4096), stats.AvailableBytes)
+	require.Zero(t, stats.TotalInodes)
+	require.Zero(t, stats.UsedInodes)
+	require.Zero(t, stats.FreeInodes)
 }
 
 // waitUntil condition returns true or timeout is reached.
