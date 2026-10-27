@@ -59,7 +59,7 @@ jobs:
 
       - name: Setup MicroCeph
         if: ${{ matrix.storage_driver == 'cephfs' }}
-        uses: canonical/lxd/.github/actions/setup-microceph@44384ab5c1c21636e0f45a6e80f1dfe95cf51c3b
+        uses: canonical/lxd/.github/actions/setup-microceph@d1aea588bc2c67aa64496c9d80b1106e944cc626
         with:
           # The Ceph client in the LXD snap cannot parse the keys that MicroCeph
           # latest/edge creates.
