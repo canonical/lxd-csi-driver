@@ -6,8 +6,8 @@ require (
 	github.com/canonical/lxd v0.0.0-20260922133003-a96bb162d4e3
 	github.com/container-storage-interface/spec v1.13.0
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0
-	github.com/onsi/ginkgo/v2 v2.33.0
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.7.0
+	github.com/onsi/ginkgo/v2 v2.33.1
 	github.com/onsi/gomega v1.44.0
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/sys v0.49.0
