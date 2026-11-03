@@ -6,8 +6,8 @@ require (
 	github.com/canonical/lxd v0.0.0-20260922133003-a96bb162d4e3
 	github.com/container-storage-interface/spec v1.13.0
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0
-	github.com/onsi/ginkgo/v2 v2.33.0
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.7.0
+	github.com/onsi/ginkgo/v2 v2.33.1
 	github.com/onsi/gomega v1.44.0
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/sys v0.49.0
@@ -17,7 +17,7 @@ require (
 	k8s.io/apimachinery v0.37.1
 	k8s.io/client-go v0.37.1
 	k8s.io/klog/v2 v2.140.0
-	k8s.io/mount-utils v0.37.1
+	k8s.io/mount-utils v0.37.2
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 )
 
