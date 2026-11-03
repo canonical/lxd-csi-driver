@@ -66,7 +66,7 @@ jobs:
           microceph-channel: tentacle/stable
 
       - name: Setup LXD
-        uses: canonical/setup-lxd@e3ef25fc529b40aa403b264cdf44e7882b361164
+        uses: canonical/setup-lxd@e38f436c468900dfe2b6ca98fb8eb352bbbb917a
         with:
           bridges: "lxdbr0,${{ env.K8S_CLUSTER_NAME }}-br0"
           channel: latest/edge
