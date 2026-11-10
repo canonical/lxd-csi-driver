@@ -59,14 +59,14 @@ jobs:
 
       - name: Setup MicroCeph
         if: ${{ matrix.storage_driver == 'cephfs' }}
-        uses: canonical/lxd/.github/actions/setup-microceph@44384ab5c1c21636e0f45a6e80f1dfe95cf51c3b
+        uses: canonical/lxd/.github/actions/setup-microceph@c4a87bc5626cec1a9ee5770f51005b1615db39bb
         with:
           # The Ceph client in the LXD snap cannot parse the keys that MicroCeph
           # latest/edge creates.
           microceph-channel: tentacle/stable
 
       - name: Setup LXD
-        uses: canonical/setup-lxd@e3ef25fc529b40aa403b264cdf44e7882b361164
+        uses: canonical/setup-lxd@148b75cb43f4ac1356752fad771cc418cb215033
         with:
           bridges: "lxdbr0,${{ env.K8S_CLUSTER_NAME }}-br0"
           channel: latest/edge
