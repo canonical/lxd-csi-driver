@@ -71,6 +71,7 @@ setEnv() {
     : "${K8S_CSI_IMAGE_PATH:=}" # Path to the custom LXD CSI driver image to import to cluster nodes.
     : "${K8S_CSI_IMAGE_TAG:=latest-edge}"    # Use "dev" to build and use local image from this repository.
     : "${K8S_CSI_CHART_TAG:=v0-latest-edge}" # Ignored when K8S_CSI_IMAGE_TAG is "dev".
+    : "${K8S_HELM_TIMEOUT:=300s}"
 
     # LXD instance, storage, and network configuration.
     : "${LXD_INSTANCE_IMAGE:=ubuntu-minimal-daily:24.04}"
@@ -581,15 +582,26 @@ installLXDCSIDriver() {
         chartVersion=(--version "${K8S_CSI_CHART_TAG}")
     fi
 
-    helm install lxd-csi "${chartRepo}" \
+    if ! helm install lxd-csi "${chartRepo}" \
         --kubeconfig "${kubeconfigPath}" \
         --namespace lxd-csi \
-        --timeout 120s \
+        --timeout "${K8S_HELM_TIMEOUT}" \
         --wait \
         --debug \
         --set driver.image.tag="${K8S_CSI_IMAGE_TAG}" \
         --set snapshotter.enabled=true \
-        "${chartVersion[@]}"
+        "${chartVersion[@]}"; then
+        echo "==> DEBUG: lxd-csi pods" >&2
+        kubectl --kubeconfig "${kubeconfigPath}" -n lxd-csi get pods -o wide >&2 || true
+
+        echo "==> DEBUG: lxd-csi pod descriptions" >&2
+        kubectl --kubeconfig "${kubeconfigPath}" -n lxd-csi describe pods >&2 || true
+
+        echo "==> DEBUG: lxd-csi events" >&2
+        kubectl --kubeconfig "${kubeconfigPath}" -n lxd-csi get events --sort-by='.lastTimestamp' >&2 || true
+
+        return 1
+    fi
 }
 
 # help prints the usage information for this script.
