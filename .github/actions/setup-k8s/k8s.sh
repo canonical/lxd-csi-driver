@@ -68,6 +68,8 @@ setEnv() {
     : "${K8S_NODE_COUNT:=1}"
     : "${K8S_SNAP_CHANNEL:=latest/edge}"
     : "${K8S_SNAP_CACHE_DIR:=}" # Optional snap cache directory for offline k8s snap installation.
+    : "${K8S_IMAGE_CACHE_PATH:=}" # Optional OCI image tarball cache path (imported on hit, exported on miss).
+    : "${K8S_IMAGE_CACHE_EXTRA_IMAGES:=}" # Optional space-separated extra OCI images to include in the image cache.
     : "${K8S_KUBECONFIG_PATH:=${ROOT_DIR}/.kube/${K8S_CLUSTER_NAME}.yml}" # Do not use "${HOME}/..." by default to avoid overwriting user's kubeconfig.
     : "${K8S_CSI_IMAGE_PATH:=}" # Path to the custom LXD CSI driver image to import to cluster nodes.
     : "${K8S_CSI_IMAGE_TAG:=latest-edge}"    # Use "dev" to build and use local image from this repository.
@@ -358,6 +360,130 @@ k8sInstall() {
     lxc exec "${instance}" --project "${project}" -- bash -c "echo \"alias k='k8s kubectl'\" >> ~/.bashrc"
 }
 
+# k8sStageImageCache copies a cached OCI image tarball into the Canonical Kubernetes
+# containerd side-load directory so images are imported automatically on startup.
+k8sStageImageCache() {
+    local instance="$1"
+    local imagePath="$2"
+    local project="${LXD_PROJECT_NAME}"
+
+    if [ -z "${imagePath}" ] || [ ! -f "${imagePath}" ]; then
+        return 0
+    fi
+
+    echo "===> ${instance}: Staging cached container images from ${imagePath} ..."
+    lxc exec "${instance}" --project "${project}" -- mkdir -p /var/snap/k8s/common/images
+    lxc file push --quiet --project "${project}" "${imagePath}" "${instance}/var/snap/k8s/common/images/cache.tar"
+}
+
+# k8sWaitImageCacheLoaded waits for containerd's sideload-images plugin to finish
+# importing the staged cache tarball on all nodes, then removes the loaded archive
+# to reclaim VM disk space.
+k8sWaitImageCacheLoaded() {
+    local project="${LXD_PROJECT_NAME}"
+
+    if [ -z "${K8S_IMAGE_CACHE_PATH}" ] || [ ! -f "${K8S_IMAGE_CACHE_PATH}" ]; then
+        return 0
+    fi
+
+    echo "===> Waiting for cached container images to finish importing on all nodes ..."
+    for i in $(seq 1 "${K8S_NODE_COUNT}"); do
+        local instance="${K8S_CLUSTER_NAME}-node-${i}"
+        local deadline=$((SECONDS + 120))
+        while (( SECONDS < deadline )); do
+            if lxc exec "${instance}" --project "${project}" -- test -f /var/snap/k8s/common/images/cache.tar.loaded; then
+                lxc exec "${instance}" --project "${project}" -- rm -f /var/snap/k8s/common/images/cache.tar.loaded
+                break
+            fi
+            if ! lxc exec "${instance}" --project "${project}" -- test -f /var/snap/k8s/common/images/cache.tar; then
+                break
+            fi
+            sleep 2
+        done
+        if lxc exec "${instance}" --project "${project}" -- test -f /var/snap/k8s/common/images/cache.tar; then
+            echo "Warning: ${instance}: Timed out waiting for cached images to load; continuing" >&2
+        fi
+    done
+}
+
+# k8sExportImageCache exports all container images pulled across the cluster into
+# a single OCI tarball so subsequent runs can side-load them without pulling from
+# upstream registries.
+k8sExportImageCache() {
+    local outputPath="$1"
+    local firstNode="${K8S_CLUSTER_NAME}-node-1"
+    local project="${LXD_PROJECT_NAME}"
+    local ctr=(/snap/k8s/current/bin/ctr --address /run/containerd/containerd.sock --namespace k8s.io)
+    local arch platform
+
+    if [ -z "${outputPath}" ] || [ -f "${outputPath}" ] || [ "${K8S_CSI_IMAGE_TAG}" = "dev" ]; then
+        return 0
+    fi
+
+    arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"
+    case "${arch}" in
+        x86_64) arch="amd64" ;;
+        aarch64) arch="arm64" ;;
+        *) ;;
+    esac
+    platform="linux/${arch}"
+
+    echo "===> Exporting cluster container images to ${outputPath} ..."
+
+    # Pre-pull any caller-requested extra images (e.g. e2e test pod image) on node 1.
+    local img
+    for img in ${K8S_IMAGE_CACHE_EXTRA_IMAGES}; do
+        if ! lxc exec "${firstNode}" --project "${project}" -- "${ctr[@]}" images pull --platform "${platform}" "${img}" >/dev/null; then
+            echo "Warning: Failed to pull extra cache image ${img}; skipping" >&2
+        fi
+    done
+
+    # Collect any tagged images present only on other nodes (e.g. pods scheduled there)
+    # onto the first node so a single export captures the full cluster image set.
+    local firstImages nodeImages
+    firstImages="$(lxc exec -T -n "${firstNode}" --project "${project}" -- "${ctr[@]}" images list -q | grep -v -e '^sha256:' -e '@sha256:' || true)"
+    for i in $(seq 2 "${K8S_NODE_COUNT}"); do
+        local node="${K8S_CLUSTER_NAME}-node-${i}"
+        nodeImages="$(lxc exec -T -n "${node}" --project "${project}" -- "${ctr[@]}" images list -q | grep -v -e '^sha256:' -e '@sha256:' || true)"
+        while IFS= read -r img; do
+            [ -n "${img}" ] || continue
+            if ! grep -qxF "${img}" <<< "${firstImages}"; then
+                echo "Copying ${img} from ${node} to ${firstNode} for cache export ..."
+                if lxc exec -T -n "${node}" --project "${project}" -- "${ctr[@]}" images export --platform "${platform}" - "${img}" \
+                    | lxc exec -T "${firstNode}" --project "${project}" -- "${ctr[@]}" images import - >/dev/null; then
+                    firstImages="${firstImages}"$'\n'"${img}"
+                else
+                    echo "Warning: Failed to copy ${img} from ${node}; skipping" >&2
+                fi
+            fi
+        done <<< "${nodeImages}"
+    done
+
+    local sortedImages
+    sortedImages="$(printf '%s\n' "${firstImages}" | sort -u)"
+
+    local imgs=()
+    while IFS= read -r img; do
+        [ -n "${img}" ] || continue
+        imgs+=("${img}")
+    done <<< "${sortedImages}"
+
+    if [ "${#imgs[@]}" -eq 0 ]; then
+        echo "Warning: No container images found to export" >&2
+        return 0
+    fi
+
+    mkdir -p "$(dirname "${outputPath}")"
+    local tmpPath="${outputPath}.tmp.$$"
+    if lxc exec -T -n "${firstNode}" --project "${project}" -- "${ctr[@]}" images export --platform "${platform}" - "${imgs[@]}" > "${tmpPath}"; then
+        mv -f "${tmpPath}" "${outputPath}"
+        echo "===> Exported ${#imgs[@]} container images to ${outputPath}"
+    else
+        rm -f "${tmpPath}"
+        echo "Warning: Failed to export container images to ${outputPath}" >&2
+    fi
+}
+
 # k8sSetupNode deploys a single Kubernetes node (master or worker).
 # It creates LXD instance and installs Canonical Kubernetes on that
 # instance.
@@ -371,6 +497,7 @@ k8sSetupNode() {
 
     waitInstanceReady "${instance}"
     k8sInstall "${instance}"
+    k8sStageImageCache "${instance}" "${K8S_IMAGE_CACHE_PATH}"
 }
 
 # k8sBootstrap bootstraps the first Canonical Kubernetes node.
@@ -687,6 +814,9 @@ case "${cmd}" in
         # Ensure cluster is ready.
         k8sWaitReady
 
+        # Ensure any staged container image cache finished loading before deploying CSI pods.
+        k8sWaitImageCacheLoaded
+
         if [ "${K8S_CSI_IMAGE_TAG}" != "" ]; then
             # Install the LXD CSI driver.
             installLXDCSIDriver
@@ -694,6 +824,9 @@ case "${cmd}" in
             # Wait for the CSI to become ready.
             k8sWaitReady
         fi
+
+        # Populate container image cache on miss so subsequent runs avoid registry pulls.
+        k8sExportImageCache "${K8S_IMAGE_CACHE_PATH}"
 
         echo "==> Done"
         echo -e "\nKubernetes cluster:"
