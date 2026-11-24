@@ -458,8 +458,19 @@ k8sWaitReady() {
 
     echo "===> Waiting for all Kubernetes nodes and pods to be ready ..."
     while (( SECONDS < deadline )); do
-        [ "${nodesReady}" -eq 0 ] && kubectl --kubeconfig "${kubeconfigPath}" wait --for=condition=Ready nodes --all --timeout=30s && nodesReady=1
-        [ "${podsReady}" -eq 0 ] && kubectl --kubeconfig "${kubeconfigPath}" wait --for=condition=Ready pods  --all -A --timeout=30s && podsReady=1
+        if [ "${nodesReady}" -eq 0 ]; then
+            local nodeCount
+            nodeCount="$(kubectl --kubeconfig "${kubeconfigPath}" get nodes --no-headers 2>/dev/null | wc -l || echo 0)"
+            if [ "${nodeCount}" -ge "${K8S_NODE_COUNT}" ] \
+                && kubectl --kubeconfig "${kubeconfigPath}" wait --for=condition=Ready nodes --all --timeout=30s; then
+                nodesReady=1
+            fi
+        fi
+        if [ "${nodesReady}" -eq 1 ] && [ "${podsReady}" -eq 0 ]; then
+            if kubectl --kubeconfig "${kubeconfigPath}" wait --for=condition=Ready pods --all -A --timeout=30s; then
+                podsReady=1
+            fi
+        fi
 
         if [ "${nodesReady}" -eq 1 ] && [ "${podsReady}" -eq 1 ]; then
             break
