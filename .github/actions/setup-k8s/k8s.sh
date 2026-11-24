@@ -365,8 +365,20 @@ k8sBootstrap() {
         return 1
     fi
 
-    echo "===> ${instance}: Bootstraping Kubernetes cluster ..."
-    lxc exec "${instance}" --project "${project}" -- k8s bootstrap --timeout=5m > /dev/null
+    echo "===> ${instance}: Bootstrapping Kubernetes cluster ..."
+    # Enable only network and dns; leave local-storage and metrics-server disabled
+    # from bootstrap so their pods and images are never deployed or pulled.
+    lxc exec -T "${instance}" --project "${project}" -- k8s bootstrap --timeout=5m --file - >/dev/null <<'EOF'
+cluster-config:
+  network:
+    enabled: true
+  dns:
+    enabled: true
+  local-storage:
+    enabled: false
+  metrics-server:
+    enabled: false
+EOF
 
     echo "===> ${instance}: Waiting for Kubernetes cluster to be ready..."
     local retry=10
@@ -392,9 +404,6 @@ k8sBootstrap() {
 
         sleep 5
     done
-
-    echo "==> ${instance}: Disabling local storage ..."
-    lxc exec "${instance}" -- k8s disable local-storage > /dev/null # Disable local storage as it is not needed for testing LXD CSI driver.
 }
 
 # k8sJoin join an additional node into already bootstraped Kubernetes cluster.
