@@ -67,10 +67,12 @@ setEnv() {
     # LXD Kubernetes cluster configuration.
     : "${K8S_NODE_COUNT:=1}"
     : "${K8S_SNAP_CHANNEL:=latest/edge}"
+    : "${K8S_SNAP_CACHE_DIR:=}" # Optional snap cache directory for offline k8s snap installation.
     : "${K8S_KUBECONFIG_PATH:=${ROOT_DIR}/.kube/${K8S_CLUSTER_NAME}.yml}" # Do not use "${HOME}/..." by default to avoid overwriting user's kubeconfig.
     : "${K8S_CSI_IMAGE_PATH:=}" # Path to the custom LXD CSI driver image to import to cluster nodes.
     : "${K8S_CSI_IMAGE_TAG:=latest-edge}"    # Use "dev" to build and use local image from this repository.
-    : "${K8S_CSI_CHART_TAG:=v0-latest-edge}" # Ignored when K8S_CSI_IMAGE_TAG is "dev".
+    : "${K8S_CSI_CHART_TAG:=v0-latest-edge}" # Ignored when K8S_CSI_IMAGE_TAG is "dev" or K8S_CSI_CHART_PATH is set.
+    : "${K8S_CSI_CHART_PATH:=}" # Optional path to a cached Helm chart archive.
     : "${K8S_HELM_TIMEOUT:=300s}"
 
     # LXD instance, storage, and network configuration.
@@ -318,19 +320,34 @@ k8sInstall() {
     fi
 
     echo "===> ${instance}: Installing Canonical Kubernetes ..."
-    lxc exec "${instance}" --project "${project}" -- timeout 60 snap wait system seed.loaded || true
 
-    # Attempt K8s install multiple times in case of transient network or snap issues.
     local success=false
-    for i in $(seq 1 5); do
-        if lxc exec "${instance}" --project "${project}" -- snap install k8s --channel="${k8sSnapChannel}" --classic; then
-            success=true
-            break
+    if [ "${project}" = "default" ] && declare -F install_snap_in_instance >/dev/null; then
+        if declare -F waitSnapdSeedInstance >/dev/null; then
+            waitSnapdSeedInstance "${instance}" || true
+        else
+            lxc exec "${instance}" --project "${project}" -- timeout 60 snap wait system seed.loaded || true
         fi
 
-        echo "===> ${instance}: Retry installing Canonical Kubernetes (attempt ${i}/5) ..."
-        sleep 3
-    done
+        if SNAP_CACHE_DIR="${K8S_SNAP_CACHE_DIR:-${SNAP_CACHE_DIR:-}}" install_snap_in_instance "${instance}" k8s "${k8sSnapChannel}"; then
+            success=true
+        fi
+    else
+        lxc exec "${instance}" --project "${project}" -- timeout 60 snap wait system seed.loaded || true
+    fi
+
+    # Fall back to the snap store with retries in case of cache miss or transient network issues.
+    if [ "${success}" != "true" ]; then
+        for i in $(seq 1 5); do
+            if lxc exec "${instance}" --project "${project}" -- snap install k8s --channel="${k8sSnapChannel}" --classic; then
+                success=true
+                break
+            fi
+
+            echo "===> ${instance}: Retry installing Canonical Kubernetes (attempt ${i}/5) ..."
+            sleep 3
+        done
+    fi
 
     if [ "${success}" != "true" ]; then
         echo "Error: ${instance}: Failed to install Canonical Kubernetes!" >&2
@@ -578,6 +595,9 @@ installLXDCSIDriver() {
     if [ "${K8S_CSI_IMAGE_TAG}" = "dev" ]; then
         # Use local chart from repository.
         chartRepo="${ROOT_DIR}/charts"
+    elif [ -n "${K8S_CSI_CHART_PATH}" ] && [ -f "${K8S_CSI_CHART_PATH}" ]; then
+        # Use cached chart archive.
+        chartRepo="${K8S_CSI_CHART_PATH}"
     else
         chartVersion=(--version "${K8S_CSI_CHART_TAG}")
     fi
