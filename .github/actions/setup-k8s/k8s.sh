@@ -317,8 +317,7 @@ k8sInstall() {
     fi
 
     echo "===> ${instance}: Installing Canonical Kubernetes ..."
-    lxc exec "${instance}" --project "${project}" -- apt-get update
-    lxc exec "${instance}" --project "${project}" -- apt-get upgrade -y
+    lxc exec "${instance}" --project "${project}" -- timeout 60 snap wait system seed.loaded || true
 
     # Attempt K8s install multiple times in case of transient network or snap issues.
     local success=false
