@@ -113,7 +113,7 @@ controller:
     image:
       repository: registry.k8s.io/sig-storage/csi-provisioner
       tag: v5.0.2
-      imagePullPolicy: IfNotPresent
+      pullPolicy: IfNotPresent
     resources: {}
       # limits:
       #   cpu: 100m
