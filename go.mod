@@ -4,7 +4,7 @@ go 1.26.7
 
 require (
 	github.com/canonical/lxd v0.0.0-20260922133003-a96bb162d4e3
-	github.com/container-storage-interface/spec v1.13.0
+	github.com/container-storage-interface/spec v1.14.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.7.0
 	github.com/onsi/ginkgo/v2 v2.34.0
