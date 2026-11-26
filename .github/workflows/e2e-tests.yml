@@ -39,7 +39,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: 'go.mod'
 
@@ -59,7 +59,7 @@ jobs:
 
       - name: Setup MicroCeph
         if: ${{ matrix.storage_driver == 'cephfs' }}
-        uses: canonical/lxd/.github/actions/setup-microceph@79eb9785e55d9a2c867a8daa12dd04cab8b39fcd
+        uses: canonical/lxd/.github/actions/setup-microceph@d202c31e43f1ff5d9c947cd0bad3a755544cf32b
         with:
           # The Ceph client in the LXD snap cannot parse the keys that MicroCeph
           # latest/edge creates.
