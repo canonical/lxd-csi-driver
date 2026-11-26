@@ -1,4 +1,5 @@
 {{- $name := .Values.node.name | required "Missing value for node.name"  }}
+{{- $healthPort := .Values.node.csiLivenessProbe.healthPort | required "Missing value for node.csiLivenessProbe.healthPort" }}
 {{- $_ := .Values.driver.tokenSecretName | required "Missing value for driver.tokenSecretName" }}
 ---
 kind: DaemonSet
@@ -97,7 +98,7 @@ spec:
               host: localhost
               {{- end }}
               path: /healthz
-              port: 39008
+              port: {{ $healthPort }}
             failureThreshold: 3
             initialDelaySeconds: 5
             timeoutSeconds: 10
@@ -144,9 +145,9 @@ spec:
               * is not exposed on the node's network interfaces.
               */}}
             {{- if .Values.node.hostNetwork }}
-            - --http-endpoint=127.0.0.1:39008
+            - --http-endpoint=127.0.0.1:{{ $healthPort }}
             {{- else }}
-            - --http-endpoint=:39008
+            - --http-endpoint=:{{ $healthPort }}
             {{- end }}
             - --probe-timeout=3s
           env:
