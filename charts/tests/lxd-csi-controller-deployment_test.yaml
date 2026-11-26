@@ -227,6 +227,39 @@ tests:
           path: metadata.namespace
           value: test-namespace
 
+  - it: Expect health endpoint on all Pod addresses by default
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[?(@.name=="lxd-csi-controller")].livenessProbe.httpGet.host
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="lxd-csi-controller")].livenessProbe.httpGet.port
+          value: 29008
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="csi-liveness-probe")].args
+          content: "--http-endpoint=:29008"
+
+  - it: Expect custom health port when configured
+    set:
+      controller:
+        csiLivenessProbe:
+          healthPort: 9818
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[?(@.name=="lxd-csi-controller")].livenessProbe.httpGet.port
+          value: 9818
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="csi-liveness-probe")].args
+          content: "--http-endpoint=:9818"
+
+  - it: Expect error when health port is not set
+    set:
+      controller:
+        csiLivenessProbe:
+          healthPort: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: "Missing value for controller.csiLivenessProbe.healthPort"
+
   - it: Expect snapshot controller sidecar when snapshotter is enabled
     set:
       controller:

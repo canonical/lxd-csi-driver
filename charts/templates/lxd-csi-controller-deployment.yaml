@@ -1,5 +1,6 @@
 {{- $name := .Values.controller.name | required "Missing value for controller.name"  }}
 {{- $isReplicated := gt (int .Values.controller.replicas) 1 }}
+{{- $healthPort := .Values.controller.csiLivenessProbe.healthPort | required "Missing value for controller.csiLivenessProbe.healthPort" }}
 {{- $_ := .Values.driver.tokenSecretName | required "Missing value for driver.tokenSecretName" }}
 ---
 kind: Deployment
@@ -146,7 +147,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 39008
+              port: {{ $healthPort }}
             failureThreshold: 3
             initialDelaySeconds: 5
             timeoutSeconds: 10
@@ -248,7 +249,7 @@ spec:
           args:
             - --v=2
             - --csi-address=$(CSI_ADDRESS)
-            - --http-endpoint=:39008
+            - --http-endpoint=:{{ $healthPort }}
             - --probe-timeout=3s
           env:
             - name: CSI_ADDRESS

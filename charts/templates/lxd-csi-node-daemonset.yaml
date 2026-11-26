@@ -1,4 +1,5 @@
 {{- $name := .Values.node.name | required "Missing value for node.name"  }}
+{{- $healthPort := .Values.node.csiLivenessProbe.healthPort | required "Missing value for node.csiLivenessProbe.healthPort" }}
 {{- $_ := .Values.driver.tokenSecretName | required "Missing value for driver.tokenSecretName" }}
 ---
 kind: DaemonSet
@@ -32,7 +33,7 @@ spec:
     spec:
       serviceAccountName: {{ .Values.node.serviceAccount.name | default .Values.node.name }}
       priorityClassName: {{ .Values.node.priorityClassName }}
-      hostNetwork: true
+      hostNetwork: {{ .Values.node.hostNetwork }}
       {{- with .Values.node.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
       {{- end }}
@@ -89,9 +90,15 @@ spec:
               readOnly: true
           livenessProbe:
             httpGet:
+              {{- /*
+                * Without "host", kubelet probes the Pod IP, which does not reach
+                * the loopback listener used with host network.
+                */}}
+              {{- if .Values.node.hostNetwork }}
               host: localhost
+              {{- end }}
               path: /healthz
-              port: 39008
+              port: {{ $healthPort }}
             failureThreshold: 3
             initialDelaySeconds: 5
             timeoutSeconds: 10
@@ -133,7 +140,15 @@ spec:
           args:
             - --v=2
             - --csi-address=$(CSI_ADDRESS)
-            - --http-endpoint=127.0.0.1:39008
+            {{- /*
+              * With host network, listen on loopback only, so the health endpoint
+              * is not exposed on the node's network interfaces.
+              */}}
+            {{- if .Values.node.hostNetwork }}
+            - --http-endpoint=127.0.0.1:{{ $healthPort }}
+            {{- else }}
+            - --http-endpoint=:{{ $healthPort }}
+            {{- end }}
             - --probe-timeout=3s
           env:
             - name: CSI_ADDRESS

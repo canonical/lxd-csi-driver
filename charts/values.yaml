@@ -156,6 +156,8 @@ controller:
       repository: registry.k8s.io/sig-storage/livenessprobe
       tag: v2.17.0
       pullPolicy: IfNotPresent
+    # -- (int) Port of the liveness probe health endpoint.
+    healthPort: 29008
     resources: {}
       # limits:
       #   cpu: 100m
@@ -201,6 +203,10 @@ node:
   # -- (string) Allows setting custom priorityClassName for CSI node plugin pods.
   # By default, system-node-critical is used which is the highest priority.
   priorityClassName: system-node-critical
+
+  # -- (bool) Whether CSI node plugin pods use the node's network namespace.
+  # When disabled, the pods use the Pod network, which requires a CNI plugin on the node.
+  hostNetwork: false
 
   serviceAccount:
     # -- (bool) Whether to create a service account for the CSI node plugin.
@@ -266,6 +272,11 @@ node:
       repository: registry.k8s.io/sig-storage/livenessprobe
       tag: v2.17.0
       pullPolicy: IfNotPresent
+    # -- (int) Port of the liveness probe health endpoint.
+    # When [node.hostNetwork] is enabled, the port must be free on every node and
+    # outside the node's ephemeral port range (net.ipv4.ip_local_port_range),
+    # otherwise an outgoing connection on the node can hold it.
+    healthPort: 29008
     resources: {}
       # limits:
       #   cpu: 100m
