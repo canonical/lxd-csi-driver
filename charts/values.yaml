@@ -202,6 +202,10 @@ node:
   # By default, system-node-critical is used which is the highest priority.
   priorityClassName: system-node-critical
 
+  # -- (bool) Whether CSI node plugin pods use the node's network namespace.
+  # When disabled, the pods use the Pod network, which requires a CNI plugin on the node.
+  hostNetwork: false
+
   serviceAccount:
     # -- (bool) Whether to create a service account for the CSI node plugin.
     create: true
